@@ -1,246 +1,127 @@
-const { createWorker, createScheduler } = require('tesseract.js');
 const fs = require('fs');
 const path = require('path');
 
 /**
- * TimetableParser class for extracting meal information from timetable images
+ * TimetableParser class for parsing college meal timetables
  */
 class TimetableParser {
-  constructor(debug = false) {
-    this.debug = debug;
+  constructor() {
+    this.daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    this.mealTypes = ['breakfast', 'lunch', 'dinner'];
   }
 
   /**
-   * Parse a timetable image and extract meal information
-   * @param {string} imagePath - Path to the timetable image
-   * @returns {Promise<Object>} - Parsed timetable data
+   * Parse text extracted from a timetable image
+   * @param {string} text - Text extracted from timetable image
+   * @returns {Object} - Parsed timetable data
    */
-  async parseImage(imagePath) {
+  async parseText(text) {
     try {
-      // Check if file exists
-      if (!fs.existsSync(imagePath)) {
-        throw new Error(`File not found: ${imagePath}`);
-      }
-
-      if (this.debug) {
-        console.log(`Processing timetable image: ${imagePath}`);
-      }
-
-      // Create Tesseract worker with non-SIMD options
-      const worker = await createWorker({
-        logger: this.debug ? console.log : () => {},
-        errorHandler: e => console.error(e),
-        workerPath: require('tesseract.js/dist/worker.min.js').workerPath,
-        corePath: require('tesseract.js-core').workerBlobURL,
-        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-      });
-
-      // Recognize text from image
-      if (this.debug) {
-        console.log('Starting OCR processing...');
+      console.log('Parsing timetable text...');
+      
+      // Split text into lines
+      const lines = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+      
+      // Extract day-wise data
+      const parsedData = {};
+      
+      for (const line of lines) {
+        // Skip header lines
+        if (line.includes('Menu') || line.startsWith('Day,')) {
+          continue;
+        }
+        
+        // Check if line contains day information
+        const dayMatch = this.daysOfWeek.find(day => line.startsWith(day));
+        
+        if (dayMatch) {
+          const day = dayMatch;
+          const parts = line.split(',').map(part => part.trim());
+          
+          // First part is the day, so remove it
+          parts.shift();
+          
+          // Find the indices where each meal section ends
+          let breakfastEnd = -1;
+          let lunchEnd = -1;
+          
+          // Find where breakfast ends (usually before a dessert item in lunch)
+          for (let i = 0; i < parts.length; i++) {
+            if (parts[i].toLowerCase().includes('fruit')) {
+              breakfastEnd = i;
+              break;
+            }
+          }
+          
+          // Find where lunch ends (usually ends with a dessert)
+          if (breakfastEnd !== -1) {
+            for (let i = breakfastEnd + 1; i < parts.length; i++) {
+              const item = parts[i].toLowerCase();
+              if (item.includes('ladoo') || 
+                  item.includes('halwa') || 
+                  item.includes('jalebi') || 
+                  item.includes('burfi') || 
+                  item.includes('kheer')) {
+                lunchEnd = i;
+                break;
+              }
+            }
+          }
+          
+          if (breakfastEnd !== -1 && lunchEnd !== -1) {
+            // Get all items for each meal
+            const breakfast = parts.slice(0, breakfastEnd + 1);
+            const lunch = parts.slice(breakfastEnd + 1, lunchEnd + 1);
+            const dinner = parts.slice(lunchEnd + 1);
+            
+            parsedData[day] = {
+              breakfast: breakfast.filter(item => item && item !== 'and'),
+              lunch: lunch.filter(item => item && item !== 'and'),
+              dinner: dinner.filter(item => item && item !== 'and')
+            };
+            
+            console.log(`Processed day: ${day}`);
+          }
+        }
       }
       
-      const { data: { text } } = await worker.recognize(imagePath);
-      
-      if (this.debug) {
-        console.log('\nRaw OCR output:');
-        console.log('-'.repeat(50));
-        console.log(text);
-        console.log('-'.repeat(50));
-      }
-
-      // Parse the extracted text into structured data
-      const timetableData = this.parseText(text);
-      
-      if (this.debug) {
-        console.log('\nParsed timetable data:');
-        console.log(JSON.stringify(timetableData, null, 2));
-      }
-
-      // Terminate worker
-      await worker.terminate();
-
-      return timetableData;
+      return parsedData;
     } catch (error) {
-      console.error('Error parsing timetable:', error);
+      console.error('Error parsing timetable text:', error);
       throw error;
     }
   }
 
   /**
-   * Parse OCR text into structured meal data
-   * @param {string} text - OCR text from timetable image
-   * @returns {Object} - Structured timetable data
+   * Parse text from a file
+   * @param {string} filePath - Path to the text file
+   * @returns {Promise<Object>} - Parsed timetable data
    */
-  parseText(text) {
-    // Split text into lines and filter out empty lines
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    
-    // Initialize result object
-    const result = {};
-    
-    // Find the header line that contains "Breakfast", "Lunch", and "Dinner"
-    const headerIndex = lines.findIndex(line => 
-      line.includes('Breakfast') && line.includes('Lunch') && line.includes('Dinner'));
-    
-    if (headerIndex === -1) {
-      if (this.debug) {
-        console.warn('Could not find header line in timetable, trying alternative parsing');
-      }
-      return this.parseTextAlternative(text);
-    }
-    
-    // Process each day's data
-    for (let i = headerIndex + 1; i < lines.length; i++) {
-      const line = lines[i];
+  async parseTextFile(filePath) {
+    try {
+      console.log(`Processing timetable text from: ${filePath}`);
       
-      // Try to extract day information (Monday, Tuesday, etc.)
-      const dayMatch = line.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i);
-      if (!dayMatch) continue;
-      
-      const day = dayMatch[1];
-      if (this.debug) {
-        console.log(`Found day: ${day}`);
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
       }
       
-      // For this specific timetable format, we need to find the meal data
-      // which might span multiple lines
+      // Read text from file
+      const text = fs.readFileSync(filePath, 'utf8');
       
-      // Find the next day's index or end of text
-      const nextDayIndex = lines.findIndex((l, idx) => 
-        idx > i && l.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i));
+      console.log('Raw timetable text:');
+      console.log('-'.repeat(50));
+      console.log(text);
+      console.log('-'.repeat(50));
       
-      const endIndex = nextDayIndex !== -1 ? nextDayIndex : lines.length;
-      
-      // Extract all lines for this day
-      const dayLines = lines.slice(i, endIndex);
-      const dayText = dayLines.join(' ');
-      
-      // Extract meal information using regex patterns
-      const breakfastMatch = dayText.match(/Breakfast[^a-zA-Z]+(.*?)(?=Lunch|$)/i);
-      const lunchMatch = dayText.match(/Lunch[^a-zA-Z]+(.*?)(?=Dinner|$)/i);
-      const dinnerMatch = dayText.match(/Dinner[^a-zA-Z]+(.*?)(?=$)/i);
-      
-      const breakfast = breakfastMatch ? breakfastMatch[1].trim() : '';
-      const lunch = lunchMatch ? lunchMatch[1].trim() : '';
-      const dinner = dinnerMatch ? dinnerMatch[1].trim() : '';
-      
-      result[day] = {
-        breakfast: this.extractFoodItems(breakfast),
-        lunch: this.extractFoodItems(lunch),
-        dinner: this.extractFoodItems(dinner)
-      };
-      
-      // Skip to the next day
-      i = endIndex - 1;
+      // Parse the text
+      return this.parseText(text);
+    } catch (error) {
+      console.error('Error parsing text file:', error);
+      throw error;
     }
-    
-    // If we couldn't parse any days, try alternative method
-    if (Object.keys(result).length === 0) {
-      if (this.debug) {
-        console.warn('Could not parse any days, trying alternative method');
-      }
-      return this.parseTextAlternative(text);
-    }
-    
-    return result;
-  }
-
-  /**
-   * Alternative parsing method for timetable text
-   * @param {string} text - OCR text from timetable image
-   * @returns {Object} - Structured timetable data
-   */
-  parseTextAlternative(text) {
-    const result = {};
-    
-    // Define days of the week
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    
-    // For each day, try to find its section in the text
-    for (const day of days) {
-      // Look for the day pattern in the text
-      const dayRegex = new RegExp(`${day}[\\s\\S]*?((?=${days.filter(d => d !== day).join('|')})|$)`, 'i');
-      const dayMatch = text.match(dayRegex);
-      
-      if (dayMatch) {
-        const dayText = dayMatch[0];
-        
-        // Try to identify the three columns (breakfast, lunch, dinner)
-        // This is a simplified approach for the specific timetable format
-        
-        // Split the day text into lines
-        const dayLines = dayText.split('\n').filter(line => line.trim() !== '');
-        
-        // First line usually contains the day and date
-        // Following lines might contain meal information
-        
-        let breakfastItems = [];
-        let lunchItems = [];
-        let dinnerItems = [];
-        
-        // Look for specific meal indicators
-        for (const line of dayLines) {
-          if (line.toLowerCase().includes('breakfast')) {
-            const items = line.replace(/breakfast/i, '').trim();
-            breakfastItems = this.extractFoodItems(items);
-          } else if (line.toLowerCase().includes('lunch')) {
-            const items = line.replace(/lunch/i, '').trim();
-            lunchItems = this.extractFoodItems(items);
-          } else if (line.toLowerCase().includes('dinner')) {
-            const items = line.replace(/dinner/i, '').trim();
-            dinnerItems = this.extractFoodItems(items);
-          } else {
-            // If no meal indicator, try to determine based on position
-            // For the specific timetable format, we know the order is day, breakfast, lunch, dinner
-            if (breakfastItems.length === 0) {
-              breakfastItems = this.extractFoodItems(line);
-            } else if (lunchItems.length === 0) {
-              lunchItems = this.extractFoodItems(line);
-            } else if (dinnerItems.length === 0) {
-              dinnerItems = this.extractFoodItems(line);
-            }
-          }
-        }
-        
-        result[day] = {
-          breakfast: breakfastItems,
-          lunch: lunchItems,
-          dinner: dinnerItems
-        };
-      }
-    }
-    
-    // If still no results, try a more aggressive approach
-    if (Object.keys(result).length === 0) {
-      // Split the text into chunks that might correspond to days
-      const chunks = text.split(/\d+\.\d+\.\d+/).filter(chunk => chunk.trim() !== '');
-      
-      // Try to assign each chunk to a day
-      for (let i = 0; i < Math.min(chunks.length, days.length); i++) {
-        const chunk = chunks[i];
-        const day = days[i];
-        
-        // Split the chunk into parts that might correspond to meals
-        const parts = chunk.split(/\s{2,}/).filter(part => part.trim() !== '');
-        
-        let breakfast = '';
-        let lunch = '';
-        let dinner = '';
-        
-        if (parts.length >= 1) breakfast = parts[0];
-        if (parts.length >= 2) lunch = parts[1];
-        if (parts.length >= 3) dinner = parts[2];
-        
-        result[day] = {
-          breakfast: this.extractFoodItems(breakfast),
-          lunch: this.extractFoodItems(lunch),
-          dinner: this.extractFoodItems(dinner)
-        };
-      }
-    }
-    
-    return result;
   }
 
   /**
@@ -258,72 +139,44 @@ class TimetableParser {
   }
 
   /**
-   * Validate the parsed timetable data
-   * @param {Object} timetableData - Parsed timetable data
+   * Validate parsed timetable data
+   * @param {Object} parsedData - Parsed timetable data
    * @returns {Object} - Validation results
    */
-  validateParsedData(timetableData) {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const parsedDays = Object.keys(timetableData);
+  validateParsedData(parsedData) {
+    const errors = [];
     
-    // Check if all days are parsed
-    const missingDays = days.filter(day => !parsedDays.includes(day));
-    const allDaysParsed = missingDays.length === 0;
+    // Check if all days are present
+    const parsedDays = Object.keys(parsedData);
+    const missingDays = this.daysOfWeek.filter(day => !parsedDays.includes(day));
     
-    // Check if each day has breakfast, lunch, and dinner
-    let mealTypesComplete = true;
-    const missingMeals = [];
-    
-    for (const day of parsedDays) {
-      const dayData = timetableData[day];
-      if (!dayData.breakfast || dayData.breakfast.length === 0) {
-        missingMeals.push(`breakfast for ${day}`);
-        mealTypesComplete = false;
-      }
-      if (!dayData.lunch || dayData.lunch.length === 0) {
-        missingMeals.push(`lunch for ${day}`);
-        mealTypesComplete = false;
-      }
-      if (!dayData.dinner || dayData.dinner.length === 0) {
-        missingMeals.push(`dinner for ${day}`);
-        mealTypesComplete = false;
-      }
+    if (missingDays.length > 0) {
+      errors.push(`Missing days: ${missingDays.join(', ')}`);
     }
     
-    // Check if we have food items for each meal
-    let foodItemsPresent = true;
-    const emptyMeals = [];
-    
+    // Check if all meal types are present for each day
     for (const day of parsedDays) {
-      const dayData = timetableData[day];
+      const dayData = parsedData[day];
+      const parsedMealTypes = Object.keys(dayData);
+      const missingMealTypes = this.mealTypes.filter(type => !parsedMealTypes.includes(type));
       
-      if (dayData.breakfast && dayData.breakfast.length === 0) {
-        emptyMeals.push(`breakfast on ${day}`);
-        foodItemsPresent = false;
+      if (missingMealTypes.length > 0) {
+        errors.push(`Missing meal types for ${day}: ${missingMealTypes.join(', ')}`);
       }
       
-      if (dayData.lunch && dayData.lunch.length === 0) {
-        emptyMeals.push(`lunch on ${day}`);
-        foodItemsPresent = false;
-      }
-      
-      if (dayData.dinner && dayData.dinner.length === 0) {
-        emptyMeals.push(`dinner on ${day}`);
-        foodItemsPresent = false;
+      // Check if food items are present for each meal
+      for (const mealType of parsedMealTypes) {
+        const foodItems = dayData[mealType];
+        
+        if (!foodItems || foodItems.length === 0) {
+          errors.push(`No food items for ${day} ${mealType}`);
+        }
       }
     }
-    
-    // Overall validation
-    const isValid = allDaysParsed && mealTypesComplete && foodItemsPresent;
     
     return {
-      isValid,
-      allDaysParsed,
-      mealTypesComplete,
-      foodItemsPresent,
-      missingDays,
-      missingMeals,
-      emptyMeals
+      isValid: errors.length === 0,
+      errors
     };
   }
 }

@@ -1,9 +1,0 @@
-Menu (12.05.25 TO 18.05.25)
-Day,Breakfast,Lunch,Dinner
-Monday 12.05.25,Poha Chutney Sandwich Bread Jam Tea Cold Coffee Fruit,Kala Chana Aloo Masala Raita Rice Poori Achar Salad Halwa,Nutree Ki Sabji Dal Muglai Pulao Roti Achar Salad Green Chutney Butter Milk
-Tuesday 13.05.25,Macaroni Bread Butter Jam Tea Cold Milk Fruit,Beans Aloo Masoor Dal Raita Rice Roti Achar Salad Boondi Ka Ladoo,Dum Aloo Rajma Rice Roti Achar Salad Milk
-Wednesday 14.05.25,Stuff Parantha Dahi Achar Bread Jam Tea Fruit,Matar Paneer Mix Dal Raita Rice Roti Achar Salad Atta Ka Ladoo,Bhindi Do Pyaja Chana Dal Rice Roti Achar Salad Milk
-Thursday 15.05.25,Aloo Sandwich Bread Jam Tea Cold Coffee Fruit,Jeera Aloo Kadhi Pakoda Rice Roti Achar Salad Jalebi,Mix Veg Dal Fry Rice Roti Achar Salad Milk
-Friday 16.05.25,Sabji - Poori Bread Jam Tea Cold Milk Fruit,Tinda Masala Dal Makhani Raita Rice Roti Achar Salad Khoye ki Burfi,Kadai Paneer Egg Curry Moong Masoor Dal Rice Roti Achar Salad Milk
-Saturday 17.05.25,Uttapam - Chutney Bread Jam Tea Cold Coffee Fruit,Veg Kofta Arhar Dal Rice Roti Achar Salad Kheer,Chole Veg Biryani Dahi Parantha Achar Salad Green Chutney Papad
-Sunday 18.05.25,Veg Sandwich Bread Omelette Jam Tea Cold Milk Fruit,Methi Malai Matar Dal Tadka Raita Jeera Rice Roti Achar Salad Besan Ka Ladoo,Shimla Mirch Aloo Masoor Sabut Dal Rice Roti Achar Salad Milk
