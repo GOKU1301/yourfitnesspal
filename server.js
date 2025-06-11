@@ -1,28 +1,27 @@
 const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
 const path = require('path');
-const dotenv = require('dotenv');
 const multer = require('multer');
-
-// Load environment variables
-dotenv.config();
+const fs = require('fs');
 
 // Initialize Express app
 const app = express();
 
 // Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cors());
+app.use(express.static('public'));
 
-// Set up multer for file uploads
+// Create images directory if it doesn't exist
+if (!fs.existsSync('./images')) {
+  fs.mkdirSync('./images');
+}
+
+// Configure multer to save files with a specific name
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, 'images/');
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+    // Always save as timetable.jpg
+    cb(null, 'timetable.jpg');
   }
 });
 
@@ -39,40 +38,18 @@ const upload = multer({
   }
 });
 
-// Create uploads directory if it doesn't exist
-const fs = require('fs');
-if (!fs.existsSync('./uploads')) {
-  fs.mkdirSync('./uploads');
-}
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('MongoDB connected'))
-.catch(err => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
+// Serve the upload form
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Define routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/meals', require('./routes/meals'));
-app.use('/api/nutrition', require('./routes/nutrition'));
-
-// Route for timetable image upload and parsing
-app.post('/api/timetable/parse', upload.single('timetable'), require('./controllers/timetableController').parseTimetable);
-
-// Serve static assets in production
-if (process.env.NODE_ENV === 'production') {
-  // Set static folder
-  app.use(express.static('client/build'));
-
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
-  });
-}
+// Handle file upload
+app.post('/upload', upload.single('timetable'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send('No file uploaded.');
+  }
+  res.send('File uploaded successfully!');
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -81,5 +58,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+  console.log('Upload form available at http://localhost:5000');
+});

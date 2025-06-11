@@ -22,21 +22,16 @@ const MealSchema = new mongoose.Schema({
   },
   // Meal information
   meals: {
-    breakfast: {
-      type: [String],
-      required: true,
-      default: []
+    type: {
+      breakfast: [String],
+      lunch: [String],
+      dinner: [String]
     },
-    lunch: {
-      type: [String],
-      required: true,
-      default: []
-    },
-    dinner: {
-      type: [String],
-      required: true,
-      default: []
-    }
+    default: () => ({
+      breakfast: [],
+      lunch: [],
+      dinner: []
+    })
   },
   // Metadata
   createdAt: {
@@ -47,22 +42,16 @@ const MealSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-});
-
-// Update the updatedAt timestamp before saving
-MealSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
-});
-
-// Create compound indexes for efficient querying
-MealSchema.index({ menuStartDate: 1, menuEndDate: 1 });
-MealSchema.index({ dayDate: 1, 'meals.breakfast': 1, 'meals.lunch': 1, 'meals.dinner': 1 });
+}, { timestamps: true });
 
 // Create a compound unique index for day and menu period
 MealSchema.index(
   { day: 1, menuStartDate: 1, menuEndDate: 1 },
   { unique: true }
 );
+
+// Index for date-based queries
+MealSchema.index({ dayDate: 1 });
+MealSchema.index({ menuStartDate: 1, menuEndDate: 1 });
 
 module.exports = mongoose.model('Meal', MealSchema);

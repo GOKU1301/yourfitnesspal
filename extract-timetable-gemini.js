@@ -33,64 +33,73 @@ async function saveMealsToMongoDB(meals, menuDates) {
   try {
     const { startDate, endDate } = menuDates;
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const bulkOps = [];
     
-    // Prepare bulk operations for each day's meals
-    Object.entries(meals).forEach(([day, dayMeals]) => {
-      const dayDate = new Date(startDate);
-      dayDate.setDate(dayDate.getDate() + daysOfWeek.indexOf(day));
-      
-      bulkOps.push({
-        updateOne: {
-          filter: {
+    // Process each day's meals one by one to avoid parallel array issues
+    const savedMeals = [];
+    
+    for (const [day, dayMeals] of Object.entries(meals)) {
+      try {
+        const dayDate = new Date(startDate);
+        dayDate.setDate(dayDate.getDate() + daysOfWeek.indexOf(day));
+        
+        // Prepare the update object
+        const updateData = {
+          $set: {
+            dayDate: dayDate,
+            'meals': {
+              breakfast: Array.isArray(dayMeals.breakfast) ? dayMeals.breakfast : [],
+              lunch: Array.isArray(dayMeals.lunch) ? dayMeals.lunch : [],
+              dinner: Array.isArray(dayMeals.dinner) ? dayMeals.dinner : []
+            },
+            updatedAt: new Date()
+          },
+          $setOnInsert: {
+            menuStartDate: startDate,
+            menuEndDate: endDate,
+            day: day,
+            createdAt: new Date()
+          }
+        };
+        
+        // Update or insert the document
+        const result = await Meal.findOneAndUpdate(
+          {
             day: day,
             menuStartDate: startDate,
             menuEndDate: endDate
           },
-          update: {
-            $set: {
-              dayDate: dayDate,
-              'meals.breakfast': dayMeals.breakfast || [],
-              'meals.lunch': dayMeals.lunch || [],
-              'meals.dinner': dayMeals.dinner || [],
-              updatedAt: new Date()
-            },
-            $setOnInsert: {
-              menuStartDate: startDate,
-              menuEndDate: endDate,
-              createdAt: new Date()
-            }
-          },
-          upsert: true
-        }
-      });
-    });
-    
-    // Execute bulk operations
-    if (bulkOps.length > 0) {
-      const result = await Meal.bulkWrite(bulkOps);
-      console.log(`\nSuccessfully processed ${bulkOps.length} days of meals`);
-      console.log('Upserted:', result.upsertedCount);
-      console.log('Modified:', result.modifiedCount);
-      
-      // Fetch and log the saved data
-      const savedMeals = await Meal.find({
-        menuStartDate: startDate,
-        menuEndDate: endDate
-      }).sort({ dayDate: 1 });
-      
-      console.log('\nSaved meal structure:');
-      savedMeals.forEach(doc => {
-        console.log(`\n${doc.day} (${doc.dayDate.toLocaleDateString()}):`);
-        console.log('  Breakfast:', doc.meals.breakfast.join(', '));
-        console.log('  Lunch:', doc.meals.lunch.join(', '));
-        console.log('  Dinner:', doc.meals.dinner.join(', '));
-      });
-      
-      return savedMeals;
+          updateData,
+          {
+            new: true,
+            upsert: true,
+            setDefaultsOnInsert: true
+          }
+        );
+        
+        savedMeals.push(result);
+        console.log(`Processed ${day}'s meals`);
+        
+      } catch (error) {
+        console.error(`Error processing ${day}'s meals:`, error.message);
+        throw error; // Re-throw to be caught by the outer try-catch
+      }
     }
     
-    return [];
+    // Fetch and log all saved meals for the period
+    const allSavedMeals = await Meal.find({
+      menuStartDate: startDate,
+      menuEndDate: endDate
+    }).sort({ dayDate: 1 });
+    
+    console.log('\nAll saved meals:');
+    allSavedMeals.forEach(doc => {
+      console.log(`\n${doc.day} (${doc.dayDate.toLocaleDateString()}):`);
+      console.log('  Breakfast:', doc.meals.breakfast.join(', '));
+      console.log('  Lunch:', doc.meals.lunch.join(', '));
+      console.log('  Dinner:', doc.meals.dinner.join(', '));
+    });
+    
+    return allSavedMeals;
   } catch (error) {
     console.error('Error saving meals to MongoDB:', error);
     throw error;
