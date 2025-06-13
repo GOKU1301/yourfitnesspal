@@ -4,8 +4,38 @@ import multer from 'multer';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { analyzeTimetableNutrition } from './utils/nutritionAnalyzer.js';
 import { processTimetableImage } from './utils/geminiProcessor.js';
+import { findBestNutritionixMatch, addFoodMappingIfNew } from './utils/nutritionixSearch.js';
+
+/**
+ * Extract food items from text
+ * @param {string} text - Raw text from the timetable
+ * @returns {Array<string>} - Array of unique food items
+ */
+function extractFoodItems(text) {
+  if (!text) return [];
+  
+  // Split by common delimiters and clean up
+  const items = text
+    .split(/[\n\r,;|]+/)
+    .map(item => item.trim())
+    .filter(item => {
+      // Filter out empty strings and very short items
+      if (!item || item.length < 3) return false;
+      
+      // Filter out common non-food items
+      const nonFoodTerms = [
+        'breakfast', 'lunch', 'dinner', 'meal', 'day', 'monday', 'tuesday', 
+        'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'time', 'menu'
+      ];
+      
+      const lowerItem = item.toLowerCase();
+      return !nonFoodTerms.some(term => lowerItem.includes(term));
+    });
+  
+  // Remove duplicates
+  return [...new Set(items)];
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -73,14 +103,46 @@ app.post('/upload', upload.single('timetable'), async (req, res) => {
     
     console.log('Extracted text saved to:', outputPath);
     
-    // Now analyze the nutrition from the extracted text
-    console.log('Analyzing nutrition information...');
-    await analyzeTimetableNutrition(outputPath);
+    // Extract food items from the text
+    const foodItems = extractFoodItems(extractedText);
+    console.log(`Found ${foodItems.length} food items in the timetable`);
+    
+    // Process each food item to update mappings
+    let addedCount = 0;
+    for (const item of foodItems) {
+      console.log(`\n🔍 Processing: "${item}"`);
+      
+      try {
+        // Find best match in Nutritionix
+        const match = await findBestNutritionixMatch(item);
+        
+        if (match.found && match.similarity > 0.6) {
+          console.log(`✅ Found match: "${match.standardName}" (similarity: ${match.similarity.toFixed(3)})`);
+          
+          // Add to mappings
+          const { added } = await addFoodMappingIfNew(match.originalName, match.standardName);
+          if (added) {
+            console.log(`📝 Added mapping: "${match.originalName}" → "${match.standardName}"`);
+            addedCount++;
+          } else {
+            console.log(`ℹ️ Mapping already exists for "${match.originalName}"`);
+          }
+        } else {
+          console.log(`⚠️ No good match found for "${item}"`);
+        }
+        
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+      } catch (error) {
+        console.error(`❌ Error processing "${item}":`, error.message);
+      }
+    }
     
     res.send(`
       <h1>Processing Complete!</h1>
-      <p>Image processed and nutrition analysis started.</p>
-      <p>Check the server console for detailed nutrition information.</p>
+      <p>Image processed and food items extracted.</p>
+      <p>Found ${foodItems.length} food items, added ${addedCount} new mappings.</p>
       <a href="/">Upload another image</a>
     `);
     

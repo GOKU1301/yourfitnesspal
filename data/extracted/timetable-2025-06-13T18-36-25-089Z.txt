@@ -1,0 +1,8 @@
+Day,Breakfast,Lunch,Dinner
+Monday,Sabji - Parantha, Achar, Bread Jam, Tea, Cold Milk, Fruit,Beans Aloo, Arhar Dal, Raita, Rice, Roti, Achar, Salad, Besan Ki Burfi,Kashmiri Dum Aloo, Veg Biryani, Raita, Roti, Achar, Salad, Papad Green Chutney
+Tuesday,Mix Veg Sandwich, Bread Jam, Tea, Cold Coffee, Fruit,Spring Onion, Chana Dal, Raita, Rice, Roti, Achar, Salad, Boondi,Mix Veg, Urad Sabut Dal, Rice, Roti, Achar, Salad, Milk
+Wednesday,Poha, Daliya, Bread Jam, Tea, Fruit,Chole, Lapetwa Aloo, Raita, Pulao, Kachori, Achar, Salad, Halwa,Palak Paneer, Arhar Dal, Raita, Rice, Roti, Achar, Salad, Milk
+Thursday,Stuff Parantha, Dahi, Achar, Bread Jam, Tea, Fruit,Dahi Ka Aloo, Rajma, Rice, Roti, Achar, Salad, Gulab Jamun,Kathal Ka Kofta, Aloo Masala Dry, Matar Pulao, Roti, Achar, Salad, Butter Milk
+Friday,Coleslaw Sandwich, French Toast, Bread Jam, Tea, Cold Milk, Fruit,Nutree Matar, Masoor Sabut Dal, Rice, Roti, Achar, Salad, Semiya Ki Kheer,Sambhar - Vada, Chutney, Aloo Tamatar, Lemon Rice, Roti, Achar, Milk
+Saturday,Namkeen Semiya, Bread Butter Jam, Tea, Cold Milk, Coffee, Fruit,Aloo Matar, Arhar Dal, Raita, Rice, Roti, Achar, Salad, Khoye ki Burfi,Dal Makhani, Veg Tehari, Dahi, Stuff Parantha, Achar, Salad, Green Chutney, Papad
+Sunday,Chole - Bhature, Achar, Bread Jam, Tea, Cold Milk, Fruit,Gobhi Masala, Dal Fry, Raita, Rice, Roti, Achar, Salad, Balu Shahi,Paneer Do Pyaja, Egg Curry, Mix Dal, Rice, Roti, Achar, Salad, Milk

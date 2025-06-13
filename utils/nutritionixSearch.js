@@ -1,0 +1,545 @@
+import axios from 'axios';
+import { promises as fs } from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { calculateStringSimilarity } from './foodMapping.js';
+import { getFallbackNutrition } from './geminiNutrition.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config();
+
+const NUTRITIONIX_APP_ID = process.env.NUTRITIONIX_APP_ID;
+const NUTRITIONIX_APP_KEY = process.env.NUTRITIONIX_APP_KEY;
+
+if (!NUTRITIONIX_APP_ID || !NUTRITIONIX_APP_KEY) {
+  console.error('Error: Nutritionix API credentials missing. Please set NUTRITIONIX_APP_ID and NUTRITIONIX_APP_KEY in .env file');
+}
+
+/**
+ * Search for food items in Nutritionix API
+ * @param {string} query - Food item to search for
+ * @returns {Promise<Array>} - Array of matching food items
+ */
+async function searchNutritionix(query) {
+  try {
+    console.log(`🔍 Searching Nutritionix for: "${query}"`);
+    
+    const response = await axios({
+      method: 'GET',
+      url: 'https://trackapi.nutritionix.com/v2/search/instant',
+      headers: {
+        'x-app-id': NUTRITIONIX_APP_ID,
+        'x-app-key': NUTRITIONIX_APP_KEY,
+        'Content-Type': 'application/json'
+      },
+      params: {
+        query: query,
+        detailed: true
+      }
+    });
+    
+    // Combine common and branded foods
+    const allFoods = [
+      ...(response.data.common || []),
+      ...(response.data.branded || [])
+    ];
+    
+    console.log(`✅ Found ${allFoods.length} matches for "${query}"`);
+    return allFoods;
+  } catch (error) {
+    console.error(`❌ Error searching Nutritionix for "${query}":`, error.message);
+    // If rate limited, wait and retry
+    if (error.response && error.response.status === 429) {
+      console.log('⏱️ Rate limited, waiting 2 seconds before retrying...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return searchNutritionix(query);
+    }
+    return [];
+  }
+}
+
+/**
+ * Find the best match for a food item in Nutritionix
+ * @param {string} foodItem - The food item to find a match for
+ * @param {boolean} useGeminiFallback - Whether to use Gemini as fallback
+ * @returns {Promise<Object>} - The best match and its information
+ */
+async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
+  if (!foodItem || typeof foodItem !== 'string' || foodItem.trim().length < 2) {
+    return { 
+      found: false, 
+      originalName: foodItem || '',
+      error: 'Invalid food item',
+      similarity: 0
+    };
+  }
+  
+  const cleanedFoodItem = foodItem.trim();
+  
+  try {
+    // Search Nutritionix
+    const matches = await searchNutritionix(cleanedFoodItem);
+    
+    if (matches.length === 0) {
+      console.log(`⚠️ No matches found for "${cleanedFoodItem}" in Nutritionix`);
+      
+      // Use Gemini fallback if enabled
+      if (useGeminiFallback) {
+        console.log(`🤖 Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        return await getFallbackNutrition(cleanedFoodItem);
+      }
+      
+      return { 
+        found: false, 
+        originalName: cleanedFoodItem, 
+        error: 'No matches found',
+        similarity: 0
+      };
+    }
+    
+    // If we got matches but they don't have nutrition data, try to fetch it
+    const enhancedMatches = await Promise.all(matches.map(async (match) => {
+      // If the match already has nutrition data, use it
+      if (match.nf_calories !== undefined || (match.full_nutrients && match.full_nutrients.length > 0)) {
+        return match;
+      }
+      
+      // Otherwise, try to fetch the detailed nutrition data
+      try {
+        const foodId = match.nix_item_id || match.food_name;
+        if (!foodId) return match;
+        
+        console.log(`🔍 Fetching detailed nutrition data for: ${match.food_name || match.foodName}`);
+        const response = await axios({
+          method: 'GET',
+          url: 'https://trackapi.nutritionix.com/v2/search/item',
+          headers: {
+            'x-app-id': NUTRITIONIX_APP_ID,
+            'x-app-key': NUTRITIONIX_APP_KEY,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            nix_item_id: foodId
+          }
+        });
+        
+        if (response.data && response.data.foods && response.data.foods.length > 0) {
+          return { ...match, ...response.data.foods[0] };
+        }
+      } catch (error) {
+        console.error(`Error fetching detailed nutrition for ${match.food_name || match.foodName}:`, error.message);
+      }
+      
+      return match;
+    }));
+    
+    // Use the enhanced matches for further processing
+    const matchesWithNutrition = enhancedMatches.filter(match => 
+      match.nf_calories !== undefined || 
+      (match.full_nutrients && match.full_nutrients.length > 0)
+    );
+    
+    // If no matches have nutrition data, log a warning
+    if (matchesWithNutrition.length === 0) {
+      console.log(`⚠️ No matches with nutrition data found for "${cleanedFoodItem}"`);
+      if (useGeminiFallback) {
+        console.log(`🤖 Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        return await getFallbackNutrition(cleanedFoodItem);
+      }
+      
+      return { 
+        found: false, 
+        originalName: cleanedFoodItem, 
+        error: 'No nutrition data available',
+        similarity: 0
+      };
+    }
+    
+    // Find best match based on string similarity and nutrition data availability
+    let bestMatch = null;
+    let bestSimilarity = -1;
+    
+    // Log top matches for better debugging
+    console.log(`📊 Top matches for "${cleanedFoodItem}":`);
+    const topN = Math.min(matchesWithNutrition.length, 5);
+    
+    for (let i = 0; i < matchesWithNutrition.length; i++) {
+      const match = matchesWithNutrition[i];
+      const matchName = match.food_name || match.foodName || '';
+      const similarity = calculateStringSimilarity(cleanedFoodItem, matchName);
+      
+      // Only consider matches with nutrition data
+      const hasNutritionData = match.nf_calories !== undefined || 
+                             (match.full_nutrients && match.full_nutrients.length > 0);
+      
+      if (i < topN) {
+        console.log(`   ${i+1}. "${matchName}" (similarity: ${similarity.toFixed(3)}, has nutrition: ${hasNutritionData ? '✅' : '❌'})`);
+      }
+      
+      // Prefer matches with better similarity and nutrition data
+      if (hasNutritionData && similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        bestMatch = match;
+      }
+    }
+    
+    // If no match with nutrition data was found, use the first one
+    if (!bestMatch && matchesWithNutrition.length > 0) {
+      bestMatch = matchesWithNutrition[0];
+      const matchName = bestMatch.food_name || bestMatch.foodName || '';
+      bestSimilarity = calculateStringSimilarity(cleanedFoodItem, matchName);
+      console.log(`ℹ️ No match with nutrition data found, using best match: "${matchName}"`);
+    }
+    
+    // Adjust threshold based on food type
+    const isLikelyIndianFood = isIndianFood(cleanedFoodItem);
+    const similarityThreshold = isLikelyIndianFood ? 0.6 : 0.7;
+    
+    if (isLikelyIndianFood) {
+      console.log(`ℹ️ Detected likely Indian food, using lower threshold (${similarityThreshold})`);
+    }
+    
+    const bestMatchName = bestMatch.food_name || bestMatch.foodName || '';
+    console.log(`✅ Best match: "${bestMatchName}" (similarity: ${bestSimilarity.toFixed(3)})`); 
+    
+    // Return the match if similarity is above threshold
+    if (bestSimilarity >= similarityThreshold) {
+      return {
+        found: true,
+        originalName: cleanedFoodItem,
+        standardName: bestMatchName,
+        similarity: bestSimilarity,
+        source: 'nutritionix',
+        data: bestMatch
+      };
+    } else {
+      console.log(`⚠️ No good match found for "${cleanedFoodItem}" (best similarity: ${bestSimilarity.toFixed(3)})`); 
+      
+      // Use Gemini fallback if enabled
+      if (useGeminiFallback) {
+        console.log(`🤖 Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        return await getFallbackNutrition(cleanedFoodItem, similarityThreshold);
+      }
+      
+      return { 
+        found: false, 
+        originalName: cleanedFoodItem, 
+        similarity: bestSimilarity,
+        error: 'No good match found'
+      };
+    }
+  } catch (error) {
+    console.error(`❌ Error finding match for "${cleanedFoodItem}":`, error.message);
+    
+    // Use Gemini fallback if enabled and there was an error with Nutritionix
+    if (useGeminiFallback) {
+      console.log(`🤖 Trying Gemini fallback due to error for "${cleanedFoodItem}"...`);
+      try {
+        return await getFallbackNutrition(cleanedFoodItem);
+      } catch (fallbackError) {
+        console.error(`❌ Gemini fallback also failed for "${cleanedFoodItem}":`, fallbackError.message);
+      }
+    }
+    
+    return { 
+      found: false, 
+      originalName: cleanedFoodItem, 
+      error: error.message,
+      similarity: 0
+    };
+  }
+}
+
+/**
+ * Check if a food item is likely Indian food based on common terms
+ * @param {string} foodItem - The food item to check
+ * @returns {boolean} - Whether the food is likely Indian
+ */
+function isIndianFood(foodItem) {
+  const indianFoodTerms = [
+    'aloo', 'paneer', 'dal', 'roti', 'naan', 'tikka', 'masala', 
+    'sabzi', 'puri', 'paratha', 'samosa', 'pulao', 'biryani',
+    'korma', 'vindaloo', 'kheer', 'ladoo', 'gulab', 'jamun',
+    'raita', 'chutney', 'sambar', 'rasam', 'dosa', 'idli', 'vada'
+  ];
+  
+  return indianFoodTerms.some(term => 
+    foodItem.toLowerCase().includes(term.toLowerCase())
+  );
+}
+
+/**
+ * Add a food mapping if it doesn't already exist
+ * @param {string} localName - Original food name
+ * @param {string} standardName - Standard food name in Nutritionix
+ * @returns {Promise<{added: boolean, existed: boolean}>} - Whether the mapping was added or existed
+ */
+async function addFoodMappingIfNew(localName, standardName) {
+  const mappingsPath = path.join(process.cwd(), 'data', 'foodMappings.json');
+  const mappingsDir = path.dirname(mappingsPath);
+  
+  try {
+    // Create data directory if it doesn't exist
+    await fs.mkdir(mappingsDir, { recursive: true });
+    
+    let mappings = {};
+    
+    // Read existing mappings if file exists
+    try {
+      const rawData = await fs.readFile(mappingsPath, 'utf8');
+      if (rawData.trim()) {
+        mappings = JSON.parse(rawData);
+      }
+    } catch (readError) {
+      if (readError.code !== 'ENOENT') {
+        console.error('❌ Error reading food mappings:', readError.message);
+      }
+      // If file doesn't exist, we'll create it with the new mapping
+    }
+    
+    // Normalize names
+    const normalizedLocalName = localName.toLowerCase().trim();
+    const normalizedStandardName = standardName.toLowerCase().trim();
+    
+    // Check if mapping already exists
+    if (mappings[normalizedLocalName]) {
+      const existingMapping = mappings[normalizedLocalName];
+      if (existingMapping === normalizedStandardName) {
+        console.log(`ℹ️ Mapping already exists: "${normalizedLocalName}" → "${normalizedStandardName}"`);
+        return { added: false, existed: true };
+      } else {
+        console.log(`🔄 Updating mapping: "${normalizedLocalName}" from "${existingMapping}" to "${normalizedStandardName}"`);
+      }
+    }
+    
+    // Add/update the mapping
+    mappings[normalizedLocalName] = normalizedStandardName;
+    
+    // Write back to file with pretty print
+    await fs.writeFile(mappingsPath, JSON.stringify(mappings, null, 2), 'utf8');
+    
+    return { 
+      added: true, 
+      existed: false 
+    };
+    
+  } catch (error) {
+    console.error('❌ Error adding/updating food mapping:', error.message);
+    return { 
+      added: false, 
+      existed: false,
+      error: error.message 
+    };
+  }
+}
+
+/**
+ * Process a list of food items and add mappings for them
+ * @param {Array<string>} foodItems - List of food items to process
+ * @returns {Promise<Array>} - Results of processing
+ */
+async function processFoodItemsForMappings(foodItems) {
+  const results = [];
+  
+  console.log(`🚀 Processing ${foodItems.length} food items for mappings...`);
+  
+  // Process each food item
+  for (const item of foodItems) {
+    if (!item || item.trim() === '') continue;
+    
+    console.log(`\n🔍 Processing: "${item}"`);
+    
+    try {
+      // Find best match in Nutritionix
+      const match = await findBestNutritionixMatch(item);
+      
+      if (match.found && match.similarity > 0.6) {
+        // Add to mappings if it's a good match
+        const added = await addFoodMappingIfNew(match.originalName, match.standardName);
+        results.push({
+          originalName: match.originalName,
+          standardName: match.standardName,
+          similarity: match.similarity,
+          added
+        });
+      } else {
+        console.log(`⚠️ No good match found for "${item}". Skipping.`);
+      }
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      console.error(`❌ Error processing "${item}":`, error.message);
+      results.push({
+        originalName: item,
+        error: error.message
+      });
+    }
+  }
+  
+  console.log(`\n✅ Completed processing ${results.length} food items`);
+  return results;
+}
+
+/**
+ * Get detailed nutrition information for a food item
+ * @param {string} foodItem - The food item to get nutrition for
+ * @param {boolean} useGeminiFallback - Whether to use Gemini as fallback
+ * @returns {Promise<Object>} - Nutrition information
+ */
+async function getNutritionInfo(foodItem, useGeminiFallback = true) {
+  try {
+    // First find the best match
+    const match = await findBestNutritionixMatch(foodItem, useGeminiFallback);
+    
+    if (!match.found) {
+      return {
+        success: false,
+        originalName: foodItem,
+        error: match.error || 'No nutrition information found',
+        source: match.source || 'unknown'
+      };
+    }
+    
+    // If the match is from Gemini, the nutrition data is already included
+    if (match.source === 'gemini') {
+      return {
+        success: true,
+        originalName: match.originalName,
+        standardName: match.standardName,
+        source: 'gemini',
+        confidence: match.confidence,
+        nutrition: match.nutrition
+      };
+    }
+    
+    // Extract nutrition data from Nutritionix API response
+    const nutritionData = match.data.food || match.data;
+    
+    // Log the full response for debugging
+    // console.log('Nutritionix API response:');
+    
+    // Common nutrient IDs in Nutritionix
+    const NUTRIENT_IDS = {
+      PROTEIN: 203,
+      CARBS: 205,
+      FAT: 204,
+      FIBER: 291,
+      SUGAR: 269,
+      CALORIES: 208
+    };
+    
+    // Helper to find nutrient by attribute ID in full_nutrients array
+    const getNutrientValue = (data, possibleFields, attrId = null) => {
+      // First try direct fields
+      for (const field of possibleFields) {
+        if (data[field] !== undefined) {
+          return data[field];
+        }
+      }
+      
+      // Then try full_nutrients array if available
+      if (data.full_nutrients && Array.isArray(data.full_nutrients)) {
+        // If specific attribute ID is provided, use it
+        if (attrId !== null) {
+          const nutrient = data.full_nutrients.find(n => n.attr_id === attrId);
+          if (nutrient) return nutrient.value;
+        }
+        
+        // Otherwise try to find by name in the full_nutrients array
+        for (const field of possibleFields) {
+          const fieldLower = field.toLowerCase();
+          const nutrient = data.full_nutrients.find(n => 
+            n.name && n.name.toLowerCase().includes(fieldLower)
+          );
+          if (nutrient) return nutrient.value;
+        }
+      }
+      
+      return 0; // Default to 0 if not found
+    };
+    
+    // Get serving size - prioritize serving_weight_grams, then calculate from qty and weight
+    let servingSize = 100; // Default to 100g if not specified
+    if (nutritionData.serving_weight_grams) {
+      servingSize = nutritionData.serving_weight_grams;
+    } else if (nutritionData.serving_qty && nutritionData.serving_unit) {
+      // Try to estimate weight based on serving quantity and unit
+      const weightPerServing = {
+        'g': 1,
+        'ml': 1, // Assuming 1ml ≈ 1g for most foods
+        'oz': 28.35,
+        'lb': 453.6,
+        'cup': 240, // Approximate for most ingredients
+        'tbsp': 15,
+        'tsp': 5,
+        'piece': 100, // Default weight for a piece
+        'slice': 30   // Default weight for a slice
+      };
+      
+      const unit = nutritionData.serving_unit.toLowerCase();
+      if (weightPerServing[unit]) {
+        servingSize = nutritionData.serving_qty * weightPerServing[unit];
+      }
+    }
+    
+    // Get nutrition values
+    const calories = getNutrientValue(nutritionData, ['nf_calories', 'calories', 'cal'], NUTRIENT_IDS.CALORIES);
+    const protein = getNutrientValue(nutritionData, ['nf_protein', 'protein', 'proteins'], NUTRIENT_IDS.PROTEIN);
+    const carbs = getNutrientValue(nutritionData, ['nf_total_carbohydrate', 'carbs', 'carbohydrates', 'total_carbohydrate'], NUTRIENT_IDS.CARBS);
+    const fat = getNutrientValue(nutritionData, ['nf_total_fat', 'fat', 'total_fat'], NUTRIENT_IDS.FAT);
+    const fiber = getNutrientValue(nutritionData, ['nf_dietary_fiber', 'fiber', 'dietary_fiber'], NUTRIENT_IDS.FIBER);
+    const sugar = getNutrientValue(nutritionData, ['nf_sugars', 'sugar', 'sugars'], NUTRIENT_IDS.SUGAR);
+    
+    // Log the extracted values for debugging
+    // console.log('Extracted nutrition values:', {
+    //   servingSize,
+    //   calories,
+    //   protein,
+    //   carbs,
+    //   fat,
+    //   fiber,
+    //   sugar
+    // });
+    
+    return {
+      success: true,
+      originalName: match.originalName,
+      standardName: match.standardName,
+      source: 'nutritionix',
+      similarity: match.similarity,
+      nutrition: {
+        serving_size_g: Math.round(servingSize * 100) / 100, // Round to 2 decimal places
+        calories: Math.round(calories * 100) / 100,
+        protein_g: Math.round(protein * 100) / 100,
+        carbohydrates_total_g: Math.round(carbs * 100) / 100,
+        fat_total_g: Math.round(fat * 100) / 100,
+        fiber_g: Math.round(fiber * 100) / 100,
+        sugar_g: Math.round(sugar * 100) / 100
+      },
+      // Include the full match data for debugging
+      _fullData: match.data
+    
+    };
+  } catch (error) {
+    console.error(`❌ Error getting nutrition info for "${foodItem}":`, error.message);
+    return {
+      success: false,
+      originalName: foodItem,
+      error: error.message
+    };
+  }
+}
+
+export {
+  searchNutritionix,
+  findBestNutritionixMatch,
+  addFoodMappingIfNew,
+  processFoodItemsForMappings,
+  getNutritionInfo
+};

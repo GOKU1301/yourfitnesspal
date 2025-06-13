@@ -212,7 +212,7 @@ function calculateStringSimilarity(str1, str2) {
 }
 
 /**
- * Find the standard food name for a local food item using semantic search
+ * Find the standard food name for a local food item using Nutritionix API first, then fall back to Pinecone
  * @param {string} foodItem - Food item to find mapping for
  * @returns {Promise<string>} - Standard food name
  */
@@ -229,10 +229,25 @@ async function findStandardFoodName(foodItem) {
     return localMappings[normalizedFoodItem];
   }
   
-  console.log(`ℹ️  No local mapping found, trying Pinecone...`);
+  // Import Nutritionix search function here to avoid circular dependencies
+  const { findBestNutritionixMatch, addFoodMappingIfNew } = await import('./nutritionixSearch.js');
   
   try {
-    // If Pinecone is available, try semantic search
+    // First try to find a match in Nutritionix
+    console.log(`🔎 Searching Nutritionix for: "${normalizedFoodItem}"`);
+    const nutritionixMatch = await findBestNutritionixMatch(normalizedFoodItem);
+    
+    if (nutritionixMatch.found && nutritionixMatch.similarity >= 0.7) {
+      console.log(`✅ Found NUTRITIONIX match: "${normalizedFoodItem}" → "${nutritionixMatch.standardName}" (similarity: ${nutritionixMatch.similarity.toFixed(3)})`);
+      
+      // Add this mapping for future use
+      await addFoodMappingIfNew(normalizedFoodItem, nutritionixMatch.standardName);
+      return nutritionixMatch.standardName;
+    }
+    
+    console.log(`⚠️ No good Nutritionix match found, trying Pinecone...`);
+    
+    // Fall back to Pinecone if Nutritionix didn't find a good match
     if (!pineconeInitialized) {
       console.log('⚠️ Pinecone not initialized, using original food name');
       return normalizedFoodItem;
@@ -242,7 +257,7 @@ async function findStandardFoodName(foodItem) {
     const embedding = await generateEmbedding(normalizedFoodItem);
     const queryResponse = await pineconeIndex.query({
       vector: embedding,
-      topK: 5, // Increased from 3 to 5 to get more potential matches
+      topK: 5,
       includeMetadata: true,
       includeValues: false
     });
@@ -255,48 +270,14 @@ async function findStandardFoodName(foodItem) {
 
       const bestMatch = queryResponse.matches[0];
       
-      // Adaptive threshold strategy
-      let threshold = 0.75; // Default threshold
-      
-      // Check for common misspellings using string similarity
-      const matchesWithMetadata = queryResponse.matches
-        .filter(match => match.metadata?.originalName && match.metadata?.standardName);
-      
-      // If the query is likely a misspelling (high string similarity but lower embedding similarity)
-      let possibleMisspelling = false;
-      let bestStringSimilarity = 0;
-      let bestOriginalName = '';
-      
-      // Calculate string similarity for all matches
-      for (const match of matchesWithMetadata) {
-        const originalName = match.metadata.originalName;
-        const stringSimilarity = calculateStringSimilarity(normalizedFoodItem, originalName);
-        console.log(`   - Similarity to "${originalName}": ${stringSimilarity.toFixed(3)}`);
-        
-        if (stringSimilarity > bestStringSimilarity) {
-          bestStringSimilarity = stringSimilarity;
-          bestOriginalName = originalName;
-        }
-      }
-      
-      // If we found a very similar original name, consider it a misspelling
-      possibleMisspelling = bestStringSimilarity > 0.7; // Slightly lower threshold for detection
-      
-      if (possibleMisspelling) {
-        console.log(`   🔍 Possible misspelling detected for "${normalizedFoodItem}" (best match: "${bestOriginalName}" with similarity ${bestStringSimilarity.toFixed(3)})`);
-      }
-      
-      // Lower threshold for likely misspellings
-      if (possibleMisspelling) {
-        threshold = 0.55; // Lower threshold for misspellings
-        console.log(`ℹ️ Possible misspelling detected, using lower threshold (${threshold})`);
-      }
-      
-      if (bestMatch.score > threshold && bestMatch.metadata?.standardName) {
+      // Only use Pinecone match if we're very confident
+      if (bestMatch.score > 0.8 && bestMatch.metadata?.standardName) {
         console.log(`✅ Using PINE match: "${normalizedFoodItem}" → "${bestMatch.metadata.standardName}" (score: ${bestMatch.score.toFixed(3)})`);
+        // Add this mapping for future use
+        await addFoodMappingIfNew(normalizedFoodItem, bestMatch.metadata.standardName);
         return bestMatch.metadata.standardName;
       } else {
-        console.log(`⚠️ Best match score (${bestMatch.score.toFixed(3)}) below threshold (${threshold}), using original`);
+        console.log(`⚠️ Best match score (${bestMatch.score.toFixed(3)}) below threshold (0.8), using original`);
       }
     } else {
       console.log('⚠️ No matches found in Pinecone');
@@ -382,19 +363,21 @@ async function initializeFoodMappings() {
 let pineconeInitialized = false;
 initPinecone().then(result => {
   pineconeInitialized = result;
-  if (result) {
-    // Check if we need to initialize the mappings
-    const localMappings = loadLocalMappings();
-    if (Object.keys(localMappings).length === 0) {
-      console.log('No local mappings found, initializing database...');
-      initializeFoodMappings();
-    }
+  if (pineconeInitialized) {
+    console.log('Pinecone initialized successfully');
+  } else {
+    console.warn('Pinecone initialization failed, using local mappings only');
   }
+}).catch(err => {
+  console.error('Error initializing Pinecone:', err);
+  console.warn('Falling back to local mappings only');
 });
 
 export {
   findStandardFoodName,
   addFoodMapping,
   initializeFoodMappings,
-  loadLocalMappings
+  calculateStringSimilarity,
+  loadLocalMappings,
+  saveLocalMappings
 };
