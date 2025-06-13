@@ -1,6 +1,10 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const fs = require('fs');
-const path = require('path');
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class GeminiProcessor {
   constructor() {
@@ -199,4 +203,16 @@ IMPORTANT: Your ENTIRE response should be JUST the CSV data with NO additional t
   }
 }
 
-module.exports = GeminiProcessor;
+// Process a timetable image and return the extracted text
+export async function processTimetableImage(imagePath) {
+  try {
+    const processor = new GeminiProcessor();
+    const extractedText = await processor.extractTextFromImage(imagePath);
+    return extractedText;
+  } catch (error) {
+    console.error('Error in processTimetableImage:', error);
+    throw error;
+  }
+}
+
+export default GeminiProcessor;

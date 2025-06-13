@@ -12,7 +12,6 @@ client/node_modules/
 /dist
 /tmp
 /out
-
 # misc
 .DS_Store
 .env
