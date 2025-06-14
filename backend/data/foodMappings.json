@@ -62,13 +62,13 @@
   "salad": "salad",
   "milk": "milk",
   "macaroni": "macaroni",
-  "bread butter": "bread and butter",
+  "bread butter": "bread, butter",
   "dal fry": "dal fry",
   "besan ka ladoo": "besan ladoo",
   "fried rice": "fried rice",
   "veg sandwich": "veggie sandwich",
   "chole": "chole",
-  "moong dal halwa": "moong dal salad",
+  "moong dal halwa": "moong daal halwa",
   "veg biryani": "veg biryani",
   "green chutney": "green chutney",
   "papad": "papadi",
@@ -114,5 +114,9 @@
   "french toast": "french toast",
   "masoor sabut dal": "masoor dal",
   "coffee": "coffee",
-  "gobhi masala": "gobhi paratha"
+  "gobhi masala": "gobhi paratha",
+  "dal muglai": "dal makhani",
+  "kadhi pakoda": "kadhi pakoda",
+  "malai kofta": "malai kofta",
+  "masoor dal": "masoor dal"
 }

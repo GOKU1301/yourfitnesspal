@@ -4,6 +4,7 @@ import multer from 'multer';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import cors from 'cors';
 import { processTimetableImage } from './utils/geminiProcessor.js';
 import { findBestNutritionixMatch, addFoodMappingIfNew } from './utils/nutritionixSearch.js';
 
@@ -44,6 +45,8 @@ const __dirname = dirname(__filename);
 const app = express();
 
 // Middleware
+app.use(cors());
+app.use(express.json());
 app.use(express.static('public'));
 
 // Create images directory if it doesn't exist
@@ -75,9 +78,77 @@ const upload = multer({
   }
 });
 
-// Serve the upload form
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// API endpoint for file upload
+app.post('/upload', upload.single('timetable'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    console.log('Processing uploaded image...');
+    const imagePath = path.join('images', 'timetable.jpg');
+    
+    // Process the image to extract text
+    const extractedText = await processTimetableImage(imagePath);
+    
+    // Save the extracted text
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const outputPath = path.join('data', 'extracted', `timetable-${timestamp}.txt`);
+    
+    // Ensure directory exists
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, extractedText);
+    
+    console.log('Extracted text saved to:', outputPath);
+    
+    // Extract food items from the text
+    const foodItems = extractFoodItems(extractedText);
+    console.log(`Found ${foodItems.length} food items in the timetable`);
+    
+    // Process each food item to update mappings
+    let addedCount = 0;
+    for (const item of foodItems) {
+      console.log(`\n🔍 Processing: "${item}"`);
+      
+      try {
+        // Find best match in Nutritionix
+        const match = await findBestNutritionixMatch(item);
+        
+        if (match.found && match.similarity > 0.6) {
+          console.log(`✅ Found match: "${match.standardName}" (similarity: ${match.similarity.toFixed(3)})`);
+          
+          // Add to mappings
+          const { added } = await addFoodMappingIfNew(match.originalName, match.standardName);
+          if (added) {
+            console.log(`📝 Added mapping: "${match.originalName}" → "${match.standardName}"`);
+            addedCount++;
+          } else {
+            console.log(`ℹ️ Mapping already exists for "${match.originalName}"`);
+          }
+        } else {
+          console.log(`⚠️ No good match found for "${item}"`);
+        }
+        
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+      } catch (error) {
+        console.error(`❌ Error processing "${item}":`, error.message);
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Processed ${foodItems.length} items, added ${addedCount} new mappings` 
+    });
+    
+  } catch (error) {
+    console.error('Error processing image:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to process image' 
+    });
+  }
 });
 
 // Handle file upload and processing

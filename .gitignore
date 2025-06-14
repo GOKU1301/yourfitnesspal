@@ -1,26 +1,84 @@
-# dependencies
-client/node_modules/
-/node_modules
-/.pnp
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+.pnp
 .pnp.js
+.pnp.cjs
+.pnp.loader.mjs
 
-# testing
+# Testing
 /coverage
 
-# production
+# Production
 /build
 /dist
 /tmp
 /out
-# misc
-.DS_Store
+.next/
+out/
+
+# Environment variables
+# Global .env files
 .env
+.env.*
+!.env.example
+
+# Backend .env files
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Frontend .env files
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backend specific
+backend/images/*
+!backend/images/.gitkeep
+backend/data/extracted/*
+!backend/data/extracted/.gitkeep
+
+# Frontend build files
+frontend/.next/
+frontend/build/
+frontend/.cache/
+frontend/.sass-cache/
+frontend/coverage/
+
+# Debug logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Local development
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.idea/
-.vscode/
