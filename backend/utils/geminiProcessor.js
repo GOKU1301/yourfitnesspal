@@ -14,6 +14,7 @@ class GeminiProcessor {
       throw new Error('GEMINI_API_KEY environment variable is not set');
     }
     this.genAI = new GoogleGenerativeAI(apiKey);
+    // Using flash model for faster response times
     this.model = this.genAI.getGenerativeModel({ 
       model: 'gemini-1.5-flash',
       generationConfig: {
@@ -31,79 +32,82 @@ class GeminiProcessor {
     try {
       console.log('Processing image with Gemini...');
       
-      // Check if file exists
-      if (!fs.existsSync(imagePath)) {
-        throw new Error(`Image file not found: ${imagePath}`);
+      // Convert to absolute path if it's not already
+      const absolutePath = path.isAbsolute(imagePath) ? imagePath : path.join(process.cwd(), imagePath);
+      
+      console.log(`Looking for image at: ${absolutePath}`);
+      
+      // Check if file exists and is accessible
+      if (!fs.existsSync(absolutePath)) {
+        throw new Error(`Image file not found at: ${absolutePath}. Current working directory: ${process.cwd()}`);
       }
 
-      // Read the image file
-      const imageData = fs.readFileSync(imagePath);
-      const base64Image = imageData.toString('base64');
+      // Get file stats for logging
+      const stats = fs.statSync(absolutePath);
+      if (stats.size === 0) {
+        throw new Error('Image file is empty');
+      }
+      console.log(`Image file size: ${stats.size} bytes`);
+      console.log(`Image path: ${absolutePath}`);
 
-      // Prepare the prompt with strict formatting instructions
-      const prompt = `Extract the weekly college meal timetable from this image. Follow these instructions carefully:
-
-1. FORMAT: Return ONLY a CSV (Comma-Separated Values) table with exactly 4 columns: Day, Breakfast, Lunch, Dinner
-2. DAYS: Include all 7 days of the week in order (Monday through Sunday)
-3. MEALS: Include all 3 meals for each day (Breakfast, Lunch, Dinner)
-4. SEPARATORS: Use ONLY commas (,) to separate columns
-5. TEXT: Preserve all text exactly as shown in the image
-6. MISSING: If a meal is not listed, write 'Not Available'
-7. NO EXTRA TEXT: Do not include any explanations, notes, or additional text
-
-Here's the exact format to follow:
-
-Day,Breakfast,Lunch,Dinner
-Monday,Idli Sambar,Vegetable Pulao,Dal Chawal
-Tuesday,Poha,Chole Bhature,Rajma Chawal
-Wednesday,Upma,Vegetable Biryani,Kadhi Chawal
-Thursday,Dosa,Jeera Rice,Chana Masala
-Friday,Aloo Paratha,Vegetable Pulao,Dal Makhani
-Saturday,Chole Bhature,Aloo Paratha,Paneer Butter Masala
-Sunday,Special Thali,Special Thali,Special Thali
-
-IMPORTANT: Your ENTIRE response should be JUST the CSV data with NO additional text before or after.`;
-
-      // Generate content with image
-      const imagePart = {
-        inlineData: {
-          data: base64Image,
-          mimeType: this.getMimeType(imagePath),
-        },
-      };
-
-      const result = await this.model.generateContent({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              imagePart,
-            ],
-          },
-        ],
-      });
-
-      // Get the response text
-      const response = await result.response;
-      let text = '';
-      
-      // Handle different response formats
-      if (response.text) {
-        text = response.text();
-      } else if (response.candidates && response.candidates[0]?.content?.parts[0]?.text) {
-        text = response.candidates[0].content.parts[0].text;
-      } else {
-        console.log('Unexpected response format:', JSON.stringify(response, null, 2));
-        throw new Error('Unexpected response format from Gemini API');
+      // Read image directly as buffer
+      const imageBuffer = fs.readFileSync(absolutePath);
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw new Error('Failed to read image file or file is empty');
       }
       
-      console.log('Raw Gemini response:', text);
+      // Get file extension to determine MIME type
+      const ext = path.extname(absolutePath).toLowerCase().substring(1);
+      const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
       
-      // Clean up the response to get just the CSV data
-      const csvData = this.extractCSVFromResponse(text);
-      console.log('Extracted CSV data:', csvData);
-      return csvData;
+      console.log(`Using MIME type: ${mimeType}`);
+      
+      // Simple prompt
+      const prompt = "Extract the meal timetable from this image as a CSV table with Day, Breakfast, Lunch, Dinner columns.";
+      
+      // Convert to base64
+      const base64Image = imageBuffer.toString('base64');
+      
+      // Prepare the request
+      const imageParts = [
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Image
+          }
+        }
+      ];
+
+      try {
+        console.log('Sending request to Gemini API...');
+        
+        // Use the class-level model
+        const result = await this.model.generateContent(imageParts);
+        
+        // Get response text
+        const response = await result.response;
+        const text = response.text();
+        
+        console.log('Raw Gemini response:', text.substring(0, 200) + '...');
+        
+        // Extract the CSV data
+        const csvData = this.extractCSVFromResponse(text);
+        console.log('Extracted CSV data:', csvData);
+        
+        return csvData;
+      } catch (apiError) {
+        // Detailed error logging
+        console.error('Gemini API error details:');
+        console.error(JSON.stringify({
+          message: apiError.message,
+          status: apiError.status,
+          statusText: apiError.statusText,
+          stack: apiError.stack
+        }, null, 2));
+        
+        throw apiError; // Rethrow for proper error handling upstream
+      }
     } catch (error) {
       console.error('Error extracting text with Gemini:', error);
       throw error;
@@ -111,24 +115,26 @@ IMPORTANT: Your ENTIRE response should be JUST the CSV data with NO additional t
   }
 
   /**
-   * Get MIME type based on file extension
+   * Get MIME type based on file extension and content
    * @private
    */
   getMimeType(filePath) {
-    const ext = path.extname(filePath).toLowerCase();
-    switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg';
-      case '.png':
-        return 'image/png';
-      case '.gif':
-        return 'image/gif';
-      case '.webp':
-        return 'image/webp';
-      default:
-        return 'application/octet-stream';
-    }
+    // First try to get from file extension
+    const ext = path.extname(filePath).toLowerCase().replace('.', '');
+    
+    // Map of common image extensions to their MIME types
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'bmp': 'image/bmp',
+      'tiff': 'image/tiff'
+    };
+    
+    // Return the MIME type if found, otherwise return octet-stream
+    return mimeTypes[ext] || 'application/octet-stream';
   }
 
   /**
