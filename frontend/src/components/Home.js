@@ -1,29 +1,28 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 
 const Home = () => {
-  const { isAuthenticated } = useAuth();
-
   return (
     <div className="home-container">
       <div className="hero">
         <h1>Welcome to YourFitnessPal</h1>
         <p className="lead">Your personal college meal planner and nutrition tracker</p>
         
-        {isAuthenticated ? (
-          <div className="auth-buttons">
-            <Link to="/admin/dashboard" className="btn btn-primary">
-              Go to Dashboard
-            </Link>
-          </div>
-        ) : (
-          <div className="auth-buttons">
-            <Link to="/login" className="btn btn-primary">
-              Admin Login
-            </Link>
-          </div>
-        )}
+        <div className="cta-buttons">
+          <Link 
+            to="/login" 
+            className="btn btn-primary btn-upload"
+            state={{ fromUpload: true }}
+          >
+            Upload Timetable (Admin Login Required)
+          </Link>
+          <Link 
+            to="/getnutrition" 
+            className="btn btn-secondary btn-nutrition"
+          >
+            Get Nutrition
+          </Link>
+        </div>
       </div>
       
       <div className="features">

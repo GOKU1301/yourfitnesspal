@@ -6,10 +6,13 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import cors from 'cors';
 import GeminiProcessor from './utils/geminiProcessor.js';
-import { findBestNutritionixMatch, addFoodMappingIfNew } from './utils/nutritionixSearch.js';
+import { findBestNutritionixMatch } from './utils/nutritionixSearch.js';
+import { addFoodMapping } from './utils/foodMapping.js';
+import TimetableParser from './utils/timetableParser.js';
 import authRoutes from './routes/auth.js';
 import { verifyToken, isAdmin } from './middleware/auth.js';
 import mongoose from 'mongoose';
+import Meal from './models/Meal.js';
 
 // Connect to MongoDB
 async function connectDB() {
@@ -73,12 +76,235 @@ const __dirname = dirname(__filename);
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.static('public'));
 
-// Routes
+// Log all requests for debugging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// API routes
 app.use('/api/auth', authRoutes);
+
+/**
+ * Save or update a meal plan
+ */
+app.post('/api/meals', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const { menuStartDate, menuEndDate, day, dayDate, meals } = req.body;
+
+    // Validate required fields
+    if (!menuStartDate || !menuEndDate || !day || !dayDate || !meals) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: menuStartDate, menuEndDate, day, dayDate, and meals are required'
+      });
+    }
+
+    // Check if a meal plan already exists for this day and date range
+    const existingMeal = await Meal.findOne({
+      day,
+      menuStartDate: new Date(menuStartDate),
+      menuEndDate: new Date(menuEndDate)
+    });
+
+    let savedMeal;
+
+    if (existingMeal) {
+      // Update existing meal plan
+      existingMeal.meals = meals;
+      existingMeal.updatedAt = new Date();
+      savedMeal = await existingMeal.save();
+    } else {
+      // Create new meal plan
+      const newMeal = new Meal({
+        menuStartDate: new Date(menuStartDate),
+        menuEndDate: new Date(menuEndDate),
+        day,
+        dayDate: new Date(dayDate),
+        meals
+      });
+      savedMeal = await newMeal.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Meal plan saved successfully',
+      data: savedMeal
+    });
+  } catch (error) {
+    console.error('Error saving meal plan:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to save meal plan'
+    });
+  }
+});
+
+/**
+ * Get current meal items based on day and time
+ */
+app.get('/api/meals/current', async (req, res) => {
+  const requestId = Math.random().toString(36).substring(2, 8);
+  const log = (...args) => console.log(`[${requestId}]`, ...args);
+  
+  log('=== New Request ===');
+  log('Headers:', JSON.stringify(req.headers, null, 2));
+  
+  try {
+    const now = new Date();
+    const day = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const currentTime = hours * 60 + minutes;
+    
+    log(`Current time: ${now.toISOString()}, Day: ${day}, Time: ${hours}:${minutes}`);
+    
+    // Define meal times (in minutes since midnight)
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+    const breakfastEnd = isWeekend ? 9.5 * 60 : 9 * 60;      // 9:30 AM on weekends, 9:00 AM on weekdays
+    const lunchStart = 12 * 60;                              // 12:00 PM
+    const lunchEnd = isWeekend ? 14.5 * 60 : 14 * 60;        // 2:30 PM on weekends, 2:00 PM on weekdays
+    const dinnerStart = 19.5 * 60;                           // 7:30 PM
+    const dinnerEnd = 21.5 * 60;                             // 9:30 PM
+    
+    log('Meal times:', JSON.stringify({
+      isWeekend,
+      breakfastEnd: `${breakfastEnd/60}:${breakfastEnd%60}`,
+      lunchStart: `${lunchStart/60}:${lunchStart%60}`,
+      lunchEnd: `${lunchEnd/60}:${lunchEnd%60}`,
+      dinnerStart: `${dinnerStart/60}:${dinnerStart%60}`,
+      dinnerEnd: `${dinnerEnd/60}:${dinnerEnd%60}`,
+      currentTime: `${Math.floor(currentTime/60)}:${currentTime%60}`
+    }, null, 2));
+    
+    let mealType, nextMeal, nextMealTime;
+    
+    // Determine current meal type and next meal
+    log('Determining meal type...');
+    if (currentTime < breakfastEnd) {
+      mealType = 'breakfast';
+      nextMeal = 'lunch';
+      nextMealTime = '12:00';
+      log('Meal determined: Breakfast (current)');
+    } else if (currentTime < lunchStart) {
+      mealType = null;
+      nextMeal = 'lunch';
+      nextMealTime = '12:00';
+      log('No current meal. Next meal: Lunch at 12:00');
+    } else if (currentTime < lunchEnd) {
+      mealType = 'lunch';
+      nextMeal = 'dinner';
+      nextMealTime = '19:30';
+      log('Meal determined: Lunch (current)');
+    } else if (currentTime < dinnerStart) {
+      mealType = null;
+      nextMeal = 'dinner';
+      nextMealTime = '19:30';
+      log('No current meal. Next meal: Dinner at 19:30');
+    } else if (currentTime < dinnerEnd) {
+      mealType = 'dinner';
+      nextMeal = 'breakfast';
+      nextMealTime = '07:00';
+      log('Meal determined: Dinner (current)');
+    } else {
+      mealType = null;
+      nextMeal = 'breakfast';
+      nextMealTime = '07:00';
+      log('No current meal. Next meal: Breakfast at 07:00');
+    }
+    
+    // Find the most recent menu that includes today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const queryDay = day.charAt(0).toUpperCase() + day.slice(1);
+    log(`Querying database for menu on ${queryDay}...`);
+    
+    // Find the most recent menu period that includes today
+    const menuPeriod = await Meal.findOne({
+      menuStartDate: { $lte: today },
+      menuEndDate: { $gte: today }
+    }).sort({ menuStartDate: -1 });
+    
+    if (!menuPeriod) {
+      log('No active menu period found');
+      return res.status(404).json({
+        status: 'success',
+        data: {
+          currentMeal: null,
+          message: 'No active menu period found'
+        }
+      });
+    }
+    
+    // Find today's meal
+    const meal = await Meal.findOne({
+      day: queryDay,
+      menuStartDate: menuPeriod.menuStartDate,
+      menuEndDate: menuPeriod.menuEndDate
+    });
+    
+    log('Database query:', {
+      day: queryDay,
+      menuStartDate: menuPeriod.menuStartDate,
+      menuEndDate: menuPeriod.menuEndDate
+    });
+    
+    if (!meal) {
+      log(`No menu found for ${queryDay} in the current menu period`);
+      return res.status(404).json({
+        status: 'success',
+        data: {
+          currentMeal: null,
+          message: `No menu found for ${queryDay}`
+        }
+      });
+    }
+    
+    log(`Found menu with ${meal.meals ? Object.keys(meal.meals).length : 0} meal types`);
+    
+    // Log available meal types in the menu
+    if (meal.meals) {
+      Object.entries(meal.meals).forEach(([type, items]) => {
+        log(`- ${type}: ${items.length} items`);
+      });
+    }
+    
+    // Prepare response
+    const response = {
+      status: 'success',
+      data: {
+        currentMeal: mealType ? {
+          type: mealType,
+          items: meal.meals[mealType] || []
+        } : null,
+        nextMeal: {
+          type: nextMeal,
+          time: nextMealTime
+        },
+        day: day,
+        currentTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+      }
+    };
+    
+    log('Sending response:', JSON.stringify(response, null, 2));
+    return res.json(response);
+  } catch (error) {
+    console.error('Error fetching current meal:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch current meal',
+      error: error.message
+    });
+  }
+});
 
 // Create images directory if it doesn't exist
 if (!fs.existsSync('./images')) {
@@ -122,8 +348,20 @@ const SUPPORTED_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // Protected admin route for file upload
 app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async (req, res) => {
   try {
+    // Verify MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      console.error('❌ MongoDB not connected');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database not available' 
+      });
+    }
+
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'No file uploaded' 
+      });
     }
 
     console.log('Processing uploaded image...');
@@ -154,6 +392,7 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
     const processor = new GeminiProcessor();
     const extractedText = await processor.extractTextFromImage(imagePath);
     console.log('Text extraction completed');
+    console.log('Extracted text sample:', extractedText.substring(0, 200) + '...');
     
     // Save the extracted text
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -165,52 +404,176 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
     
     console.log('Extracted text saved to:', outputPath);
     
-    // Extract food items from the text
-    const foodItems = extractFoodItems(extractedText);
-    console.log(`Found ${foodItems.length} food items in the timetable`);
+    // Parse the timetable text into structured data
+    console.log('Parsing timetable data...');
+    const timetableParser = new TimetableParser();
+    const parsedTimetable = await timetableParser.parseText(extractedText);
+    console.log('Parsed timetable data:', JSON.stringify(parsedTimetable, null, 2));
     
-    // Process each food item to update mappings
-    let addedCount = 0;
-    for (const item of foodItems) {
-      console.log(`\n🔍 Processing: "${item}"`);
+    // Save parsed data to database
+    console.log('Saving timetable data to database...');
+    
+    // Set menu period (current week)
+    const menuStartDate = new Date();
+    menuStartDate.setHours(0, 0, 0, 0);
+    // Set to start of week (Sunday)
+    menuStartDate.setDate(menuStartDate.getDate() - menuStartDate.getDay());
+    
+    const menuEndDate = new Date(menuStartDate);
+    menuEndDate.setDate(menuStartDate.getDate() + 6); // End of week (Saturday)
+    menuEndDate.setHours(23, 59, 59, 999);
+    
+    console.log('Saving menu for period:', 
+      `${menuStartDate.toLocaleDateString()} to ${menuEndDate.toLocaleDateString()}`);
+    
+    // Save each day's meals
+    for (const [day, meals] of Object.entries(parsedTimetable)) {
+      const dayDate = new Date();
+      // Set day of week to match the parsed day
+      const dayIndex = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(day.toLowerCase());
+      const currentDayIndex = dayDate.getDay();
+      dayDate.setDate(dayDate.getDate() + (dayIndex - currentDayIndex + 7) % 7);
       
       try {
-        // Find best match in Nutritionix
-        const match = await findBestNutritionixMatch(item);
-        
-        if (match.found && match.similarity > 0.6) {
-          console.log(`✅ Found match: "${match.standardName}" (similarity: ${match.similarity.toFixed(3)})`);
-          
-          // Add to mappings
-          const { added } = await addFoodMappingIfNew(match.originalName, match.standardName);
-          if (added) {
-            console.log(`📝 Added mapping: "${match.originalName}" → "${match.standardName}"`);
-            addedCount++;
-          } else {
-            console.log(`ℹ️ Mapping already exists for "${match.originalName}"`);
+        // Create or update meal entry
+        const result = await Meal.findOneAndUpdate(
+          { 
+            day: day,
+            menuStartDate: menuStartDate,
+            menuEndDate: menuEndDate
+          },
+          {
+            day: day,
+            dayDate: dayDate,
+            menuStartDate: menuStartDate,
+            menuEndDate: menuEndDate,
+            meals: {
+              breakfast: meals.breakfast || [],
+              lunch: meals.lunch || [],
+              dinner: meals.dinner || []
+            }
+          },
+          { 
+            upsert: true, 
+            new: true, 
+            setDefaultsOnInsert: true,
+            useFindAndModify: false
           }
-        } else {
-          console.log(`⚠️ No good match found for "${item}"`);
+        );
+        
+        console.log(`Saved menu for ${day}:`, result);
+      } catch (dbError) {
+        console.error(`Error saving menu for ${day}:`, dbError);
+        throw dbError; // Re-throw to be caught by the outer try-catch
+      }
+    }
+    
+    // Process food items for nutrition mapping
+    const allFoodItems = Object.values(parsedTimetable).flatMap(dayMeals => 
+      Object.values(dayMeals).flat()
+    );
+    
+    console.log(`Found ${allFoodItems.length} unique food items in the timetable`);
+    
+    // Commenting out nutrition mapping processing for now
+    let addedCount = 0;
+    const uniqueFoodItems = [...new Set(allFoodItems)];
+    
+    /*
+    if (uniqueFoodItems.length > 0) {
+      console.log(`\n🔍 Processing ${uniqueFoodItems.length} unique food items for nutrition mapping...`);
+      
+      for (const item of uniqueFoodItems) {
+        console.log(`\nProcessing: "${item}"`);
+        
+        try {
+          // Find best match in Nutritionix or local mappings
+          const match = await findBestNutritionixMatch(item);
+          
+          if (match.found && match.similarity > 0.6) {
+            console.log(`✅ Found match: "${match.standardName}" (similarity: ${match.similarity.toFixed(3)})`);
+            
+            // Add to mappings
+            const { added } = await addFoodMappingIfNew(match.originalName, match.standardName);
+            if (added) {
+              console.log(`📝 Added mapping: "${match.originalName}" → "${match.standardName}"`);
+              addedCount++;
+            } else {
+              console.log(`ℹ️ Mapping already exists for "${match.originalName}"`);
+            }
+          } else {
+            console.log(`⚠️ No good match found for "${item}"`);
+          }
+        } catch (error) {
+          console.error(`Error processing food item "${item}":`, error);
+          // Continue with next item even if one fails
         }
         
         // Add a small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 300));
-        
-      } catch (error) {
-        console.error(`❌ Error processing "${item}":`, error.message);
       }
     }
+    */
     
-    res.json({ 
-      success: true, 
-      message: `Processed ${foodItems.length} items, added ${addedCount} new mappings` 
-    });
+    // Return success response
+    const response = {
+      success: true,
+      message: 'Timetable processed successfully',
+      data: {
+        imageUrl: `/images/${req.file.filename}`,
+        daysProcessed: Object.keys(parsedTimetable).length,
+        totalFoodItems: allFoodItems.length,
+        uniqueFoodItems: uniqueFoodItems.length,
+        mappingsAdded: addedCount,
+        menuPeriod: {
+          start: menuStartDate.toISOString(),
+          end: menuEndDate.toISOString()
+        }
+      }
+    };
+    
+    console.log('\n✅ Upload processed successfully:', JSON.stringify(response, null, 2));
+    return res.status(200).json(response);
     
   } catch (error) {
     console.error('Error processing image:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to process image' 
+    });
+  }
+});
+
+/**
+ * Get meal plans within a date range
+ */
+app.get('/api/meals', verifyToken, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate query parameters are required'
+      });
+    }
+
+    const meals = await Meal.find({
+      dayDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    }).sort({ dayDate: 1 });
+
+    res.status(200).json({
+      success: true,
+      data: meals
+    });
+  } catch (error) {
+    console.error('Error fetching meal plans:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch meal plans'
     });
   }
 });
@@ -224,17 +587,44 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
-  const isDBConnected = await connectDB();
-  if (!isDBConnected) {
-    console.error('❌ Failed to connect to MongoDB. Exiting...');
+  try {
+    // Connect to MongoDB
+    console.log('🔌 Connecting to MongoDB...');
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 10000 // 10 seconds timeout
+    });
+    
+    console.log('✅ MongoDB connected successfully');
+    console.log('   Database name:', mongoose.connection.name);
+    console.log('   Database host:', mongoose.connection.host);
+    
+    // Start the server
+    const server = app.listen(PORT, () => {
+      console.log(`\n🚀 Server running on port ${PORT}`);
+      console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`   API URL: http://localhost:${PORT}/api`);
+    });
+    
+    // Handle server errors
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
+      process.exit(1);
+    });
+    
+    // Handle process termination
+    process.on('SIGINT', async () => {
+      console.log('\n🛑 Shutting down server...');
+      await mongoose.connection.close();
+      console.log('✅ MongoDB connection closed');
+      process.exit(0);
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
-  
-  app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log('Database name:', mongoose.connection.name);
-    console.log('Database host:', mongoose.connection.host);
-  });
 }
 
 startServer().catch(console.error);

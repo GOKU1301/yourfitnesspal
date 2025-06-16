@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const MealSchema = new mongoose.Schema({
   // Menu period information
@@ -54,4 +54,6 @@ MealSchema.index(
 MealSchema.index({ dayDate: 1 });
 MealSchema.index({ menuStartDate: 1, menuEndDate: 1 });
 
-module.exports = mongoose.model('Meal', MealSchema);
+const Meal = mongoose.model('Meal', MealSchema);
+
+export default Meal;

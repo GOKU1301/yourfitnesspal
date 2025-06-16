@@ -373,8 +373,16 @@ body {
 
 .login-box h2 {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.5rem;
   color: var(--primary-color);
+  font-size: 2rem;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: #6c757d;
+  margin-bottom: 2rem;
+  font-size: 1rem;
 }
 
 /* Forms */
@@ -468,6 +476,232 @@ body {
   100% { transform: rotate(360deg); }
 }
 
+/* Nutrition Page */
+.nutrition-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  min-height: 70vh;
+}
+
+.nutrition-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.nutrition-header h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+}
+
+.nutrition-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 1rem;
+}
+
+.tab {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: none;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--secondary-color);
+  cursor: pointer;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.tab:hover {
+  background-color: #f8f9fa;
+}
+
+.tab.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.meal-container {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 2rem;
+  margin-top: 1rem;
+  position: relative;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.meal-container h2 {
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.meal-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.meal-card {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.meal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.meal-item {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-align: center;
+  color: #333;
+}
+
+.quantity-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.quantity-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--primary-color);
+  background: white;
+  color: var(--primary-color);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quantity-btn:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+.quantity {
+  min-width: 30px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* Loading and Error States */
+.loading-container,
+.error-message,
+.next-meal-notice,
+.no-items {
+  text-align: center;
+  padding: 2rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin: auto;
+  max-width: 600px;
+  width: 100%;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  font-size: 2rem;
+  color: var(--primary-color);
+}
+
+.error-message {
+  color: #dc3545;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.retry-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+  align-self: center;
+  margin-top: 1rem;
+}
+
+.retry-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Meal Header */
+.meal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.current-time {
+  background: #e9ecef;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-weight: 600;
+  color: #495057;
+}
+
+/* No Items Message */
+.no-items {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  grid-column: 1 / -1;
+  padding: 2rem;
+}
+
+.next-meal-notice h3 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.next-meal-notice p {
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
 /* App Footer */
 .app-footer {
   text-align: center;
@@ -510,13 +744,61 @@ body {
   font-size: 1.25rem;
   margin-bottom: 2rem;
   opacity: 0.9;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.auth-buttons {
+.cta-buttons {
   display: flex;
-  gap: 1rem;
   justify-content: center;
+  gap: 1.5rem;
   margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.cta-buttons .btn-upload {
+  background-color: white;
+  color: var(--primary-color);
+  font-size: 1.2rem;
+  font-weight: 600;
+  padding: 1rem 2.5rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.cta-buttons .btn-upload:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  background-color: #f8f9fa;
+}
+
+.cta-buttons .btn-nutrition {
+  background-color: #6c757d;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 600;
+  padding: 1rem 2.5rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: none;
+  cursor: pointer;
+}
+
+.cta-buttons .btn-nutrition:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  background-color: #5a6268;
 }
 
 .auth-buttons .btn {

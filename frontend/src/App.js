@@ -7,6 +7,7 @@ import './App.css';
 import Home from './components/Home';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
+import NutritionPage from './components/NutritionPage';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
             path="/login" 
             element={isAuthenticated ? <Navigate to="/admin/dashboard" /> : <Login />} 
           />
+          <Route path="/getnutrition" element={<NutritionPage />} />
           <Route element={<PrivateRoute adminOnly={true} />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
           </Route>

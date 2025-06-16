@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 /**
  * TimetableParser class for parsing college meal timetables
@@ -181,4 +181,4 @@ class TimetableParser {
   }
 }
 
-module.exports = TimetableParser;
+export default TimetableParser;
