@@ -29,27 +29,41 @@ class GeminiNutrition {
       console.log('Getting nutrition info from Gemini for: "' + text + '"');
       
       // Prepare the prompt with strict formatting instructions
-      const prompt = 'Provide accurate nutrition information for: "' + text + '"\n\n' +
-        'Please return ONLY a JSON object with the following structure:\n' +
-        '{\n' +
-        '  "food_name": "standard food name (most common name in English)",\n' +
-        '  "serving_weight_grams": serving size in grams (number only),\n' +
-        '  "nf_calories": calories per serving (number only),\n' +
-        '  "nf_protein": protein in grams (number only),\n' +
-        '  "nf_total_carbohydrate": total carbohydrates in grams (number only),\n' +
-        '  "nf_total_fat": total fat in grams (number only),\n' +
-        '  "nf_dietary_fiber": dietary fiber in grams (number only),\n' +
-        '  "nf_sugars": sugar in grams (number only),\n' +
-        '  "confidence": a value between 0 and 1 indicating your confidence in this data\n' +
-        '}\n\n' +
-        'IMPORTANT: \n' +
-        '1. Return ONLY valid JSON with no additional text or explanation\n' +
-        '2. Use realistic values based on standard nutritional databases\n' +
-        '3. If you\'re uncertain about the food item, set a lower confidence value\n' +
-        '4. For regional or ethnic foods, provide your best estimate based on ingredients\n' +
-        '5. DO NOT include any markdown formatting like ```json or ```\n' +
-        '6. Use null for any unknown values\n' +
-        '7. All numeric values should be numbers (not strings)';
+      const prompt = `Provide accurate nutrition information for: "${text}"
+
+Return ONLY a JSON object matching this structure (do not include any markdown):
+{
+  "name": "standard food name (English)",
+  "aliases": ["alias1", "alias2"],
+  "category": "bread | sabzi | dal | beverage | sweet | snack | dairy | etc.",
+  "servings": [
+    {
+      "size": "e.g. small, medium, cup, katori, piece, etc.",
+      "portion_label": "e.g. Full Cup, Half Roti, 1 Piece, etc.",
+      "diameter_cm": number | null, // Only for breads like roti/chapati/paratha. Null for all others.
+      "weight_g": number | null, // For solids, sweets, snacks, etc. Null if not applicable.
+      "volume_ml": number | null, // Only for beverages (tea, milk, etc.). Null for all others.
+      "calories": number,
+      "protein": number,
+      "carbs": number,
+      "fat": number
+    }
+  ]
+}
+
+IMPORTANT:
+1. Automatically detect the correct food category (bread, sabzi, dal, beverage, sweet, snack, dairy, etc.) based on the food item name and common Indian meal context.
+2. For breads (roti, chapati, paratha, etc.): Only fill diameter_cm (realistic value, e.g., 14 for roti), set volume_ml and weight_g to null.
+3. For dal, sabzi, gravies: Portion should be measured in cups or katori. Set diameter_cm and volume_ml to null, use size/portion_label and weight_g if known.
+4. For beverages (tea, milk, lassi, etc.): Only fill volume_ml (e.g., 200 for a cup), set diameter_cm and weight_g to null.
+5. For sweets/snacks: Use best-fit logic (by piece or by weight). Only fill relevant fields, set others to null.
+6. For dairy (curd, paneer): Use portion size and weight_g if known, others null.
+7. Set all unused or irrelevant fields to null (not 0).
+8. Use realistic values based on standard nutritional databases.
+9. Return ONLY valid JSON, no explanation or markdown.
+10. If unsure, set value to null.
+11. All numeric values should be numbers, not strings.
+12. The output must exactly match the above schema.`;
 
       // Generate content with the prompt
       const result = await this.model.generateContent({
@@ -136,4 +150,31 @@ async function getFallbackNutrition(foodItem, similarityThreshold = 0.7) {
   }
 }
 
+import Nutrition from '../models/Nutrition.js';
+
+/**
+ * Save or update nutrition info for a food item in the nutrition collection.
+ * @param {Object} nutritionData - Data matching the Nutrition.js schema
+ * @returns {Promise<Object>} - The saved/updated document
+ */
+export async function saveNutritionToDb(nutritionData) {
+  if (!nutritionData || !nutritionData.name) {
+    throw new Error('Invalid nutrition data: missing name');
+  }
+  // Try to find by name
+  let doc = await Nutrition.findOne({ name: nutritionData.name });
+  if (doc) {
+    // Update existing
+    doc.aliases = nutritionData.aliases || doc.aliases;
+    doc.category = nutritionData.category || doc.category;
+    doc.servings = nutritionData.servings || doc.servings;
+    await doc.save();
+  } else {
+    // Create new
+    doc = await Nutrition.create(nutritionData);
+  }
+  return doc;
+}
+
 export { GeminiNutrition, getFallbackNutrition };
+

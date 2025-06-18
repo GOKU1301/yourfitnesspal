@@ -148,6 +148,112 @@ app.post('/api/meals', verifyToken, isAdmin, async (req, res) => {
 });
 
 /**
+ * Get next meal information
+ */
+app.get('/api/meals/next', async (req, res) => {
+  const requestId = Math.random().toString(36).substring(2, 8);
+  const log = (...args) => console.log(`[${requestId}]`, ...args);
+  
+  log('=== Next Meal Request ===');
+  
+  try {
+    const now = new Date();
+    const currentDayIndex = now.getDay();
+    const currentDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][currentDayIndex];
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const currentTime = hours * 60 + minutes;
+    
+    log(`Current time: ${now.toISOString()}, Day: ${currentDay}, Time: ${hours}:${minutes}`);
+    
+    // Define meal times (in minutes since midnight)
+    const isWeekend = currentDayIndex === 0 || currentDayIndex === 6;
+    const breakfastEnd = isWeekend ? 9.5 * 60 : 9 * 60;      // 9:30 AM on weekends, 9:00 AM on weekdays
+    const lunchStart = 12 * 60;                              // 12:00 PM
+    const lunchEnd = isWeekend ? 14.5 * 60 : 14 * 60;        // 2:30 PM on weekends, 2:00 PM on weekdays
+    const dinnerStart = 19.5 * 60;                           // 7:30 PM
+    const dinnerEnd = 21.5 * 60;                             // 9:30 PM
+    
+    // Determine next meal
+    let nextMealType, nextMealTime, nextMealDay, nextMealDate;
+    
+    if (currentTime < breakfastEnd) {
+      nextMealType = 'breakfast';
+      nextMealTime = '7:00 AM';
+      nextMealDay = currentDay;
+      nextMealDate = now;
+    } else if (currentTime < lunchStart) {
+      nextMealType = 'lunch';
+      nextMealTime = '12:00 PM';
+      nextMealDay = currentDay;
+      nextMealDate = now;
+    } else if (currentTime < dinnerStart) {
+      nextMealType = 'dinner';
+      nextMealTime = '7:30 PM';
+      nextMealDay = currentDay;
+      nextMealDate = now;
+    } else {
+      // Next meal is breakfast tomorrow
+      nextMealType = 'breakfast';
+      nextMealTime = '7:00 AM';
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      nextMealDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][tomorrow.getDay()];
+      nextMealDate = tomorrow;
+    }
+    
+    // Format date as YYYY-MM-DD for database query
+    const dateString = nextMealDate.toISOString().split('T')[0];
+    
+    // Find the meal in the database
+    const meal = await Meal.findOne({
+      day: nextMealDay.toLowerCase(),
+      menuStartDate: { $lte: nextMealDate },
+      menuEndDate: { $gte: nextMealDate }
+    });
+    
+    if (!meal) {
+      log('No meal plan found for next meal');
+      return res.status(404).json({
+        status: 'success',
+        message: 'No meal plan found for next meal',
+        data: {
+          mealType: nextMealType,
+          mealTime: nextMealTime,
+          mealDay: nextMealDay,
+          mealDate: dateString,
+          items: []
+        }
+      });
+    }
+    
+    // Get the items for the next meal
+    const mealItems = meal.meals.find(m => m.mealType === nextMealType)?.items || [];
+    
+    log(`Found ${mealItems.length} items for next meal (${nextMealType})`);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        mealType: nextMealType,
+        mealTime: nextMealTime,
+        mealDay: nextMealDay,
+        mealDate: dateString,
+        items: mealItems
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error getting next meal:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to get next meal information',
+      error: error.message
+    });
+  }
+});
+
+/**
  * Get current meal items based on day and time
  */
 app.get('/api/meals/current', async (req, res) => {
@@ -155,7 +261,7 @@ app.get('/api/meals/current', async (req, res) => {
   const log = (...args) => console.log(`[${requestId}]`, ...args);
   
   log('=== New Request ===');
-  log('Headers:', JSON.stringify(req.headers, null, 2));
+  // log('Headers:', JSON.stringify(req.headers, null, 2));
   
   try {
     const now = new Date();
@@ -186,40 +292,47 @@ app.get('/api/meals/current', async (req, res) => {
     
     let mealType, nextMeal, nextMealTime;
     
-    // Determine current meal type and next meal
-    log('Determining meal type...');
-    if (currentTime < breakfastEnd) {
-      mealType = 'breakfast';
-      nextMeal = 'lunch';
-      nextMealTime = '12:00';
-      log('Meal determined: Breakfast (current)');
-    } else if (currentTime < lunchStart) {
-      mealType = null;
-      nextMeal = 'lunch';
-      nextMealTime = '12:00';
-      log('No current meal. Next meal: Lunch at 12:00');
-    } else if (currentTime < lunchEnd) {
-      mealType = 'lunch';
-      nextMeal = 'dinner';
-      nextMealTime = '19:30';
-      log('Meal determined: Lunch (current)');
-    } else if (currentTime < dinnerStart) {
-      mealType = null;
-      nextMeal = 'dinner';
-      nextMealTime = '19:30';
-      log('No current meal. Next meal: Dinner at 19:30');
-    } else if (currentTime < dinnerEnd) {
-      mealType = 'dinner';
-      nextMeal = 'breakfast';
-      nextMealTime = '07:00';
-      log('Meal determined: Dinner (current)');
-    } else {
-      mealType = null;
-      nextMeal = 'breakfast';
-      nextMealTime = '07:00';
-      log('No current meal. Next meal: Breakfast at 07:00');
-    }
-    
+      // Determine current meal type and next meal
+      log('Determining meal type...');
+      if (currentTime < breakfastEnd) {
+        mealType = 'breakfast';
+        nextMeal = 'lunch';
+        nextMealTime = '12:00';
+        log('Meal determined: Breakfast (current)');
+      } else if (currentTime < lunchStart) {
+        mealType = 'lunch';
+        nextMeal = 'lunch';
+        nextMealTime = '12:00';
+        log('No current meal. Next meal: Lunch at 12:00');
+      } else if (currentTime < lunchEnd) {
+        mealType = 'lunch';
+        nextMeal = 'dinner';
+        nextMealTime = '19:30';
+        log('Meal determined: Lunch (current)');
+      } else if (currentTime < dinnerStart) {
+        mealType = 'dinner';
+        nextMeal = 'dinner';
+        nextMealTime = '19:30';
+        log('No current meal. Next meal: Dinner at 19:30');
+      } else if (currentTime < dinnerEnd) {
+        mealType = 'dinner';
+        nextMeal = 'breakfast';
+        nextMealTime = '07:00';
+        log('Meal determined: Dinner (current)');
+      } else {
+        mealType = 'breakfast';
+        nextMeal = 'breakfast';
+        nextMealTime = '07:00';
+        log('No current meal. Next meal: Breakfast at 07:00');
+      }
+      
+      // Log the final meal type and next meal info
+      // Log the final meal type and next meal info
+log(`Final meal type: ${mealType}`);
+log(`Next meal: ${nextMeal} at ${nextMealTime}`);
+log(`Current time: ${hours}:${minutes < 10 ? '0' + minutes : minutes}`);
+log(`Current time in minutes: ${currentTime}`);
+console.log("Devansh is saying current meal is ", mealType);
     // Find the most recent menu that includes today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -278,6 +391,7 @@ app.get('/api/meals/current', async (req, res) => {
     }
     
     // Prepare response
+    
     const response = {
       status: 'success',
       data: {
@@ -479,12 +593,12 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
     let addedCount = 0;
     const uniqueFoodItems = [...new Set(allFoodItems)];
     
-    /*
+    
     if (uniqueFoodItems.length > 0) {
-      console.log(`\n🔍 Processing ${uniqueFoodItems.length} unique food items for nutrition mapping...`);
+      // console.log(`\n🔍 Processing ${uniqueFoodItems.length} unique food items for nutrition mapping...`);
       
       for (const item of uniqueFoodItems) {
-        console.log(`\nProcessing: "${item}"`);
+        // console.log(`\nProcessing: "${item}"`);
         
         try {
           // Find best match in Nutritionix or local mappings
@@ -513,7 +627,7 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
         await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
-    */
+    
     
     // Return success response
     const response = {
