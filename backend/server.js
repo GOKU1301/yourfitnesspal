@@ -8,6 +8,7 @@ import cors from 'cors';
 import GeminiProcessor from './utils/geminiProcessor.js';
 import { findBestNutritionixMatch } from './utils/nutritionixSearch.js';
 import { addFoodMapping } from './utils/foodMapping.js';
+import { processAndStoreNutrition } from './utils/nutritionPipeline.js';
 import TimetableParser from './utils/timetableParser.js';
 import authRoutes from './routes/auth.js';
 import { verifyToken, isAdmin } from './middleware/auth.js';
@@ -589,13 +590,23 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
     
     console.log(`Found ${allFoodItems.length} unique food items in the timetable`);
     
-    // Commenting out nutrition mapping processing for now
-    let addedCount = 0;
     const uniqueFoodItems = [...new Set(allFoodItems)];
-    
+
+    // ⬇️ Fetch nutrition info and store in DB
+    let nutritionStats = { saved: 0, skipped: 0, errors: [] };
+    if (uniqueFoodItems.length > 0) {
+      console.log(`\n🔍 Storing nutrition for ${uniqueFoodItems.length} unique food items...`);
+      nutritionStats = await processAndStoreNutrition(uniqueFoodItems);
+      console.log(`✅ Nutrition stored. Saved: ${nutritionStats.saved}, Skipped: ${nutritionStats.skipped}`);
+      if (nutritionStats.errors.length) {
+        console.log('⚠️ Errors in nutrition processing:', nutritionStats.errors);
+      }
+    }
     
     if (uniqueFoodItems.length > 0) {
       // console.log(`\n🔍 Processing ${uniqueFoodItems.length} unique food items for nutrition mapping...`);
+      
+      let addedCount = 0; // Initialize addedCount here
       
       for (const item of uniqueFoodItems) {
         // console.log(`\nProcessing: "${item}"`);
@@ -608,7 +619,7 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
             console.log(`✅ Found match: "${match.standardName}" (similarity: ${match.similarity.toFixed(3)})`);
             
             // Add to mappings
-            const { added } = await addFoodMappingIfNew(match.originalName, match.standardName);
+            const { added } = await addFoodMapping(match.originalName, match.standardName);
             if (added) {
               console.log(`📝 Added mapping: "${match.originalName}" → "${match.standardName}"`);
               addedCount++;
@@ -638,7 +649,9 @@ app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async 
         daysProcessed: Object.keys(parsedTimetable).length,
         totalFoodItems: allFoodItems.length,
         uniqueFoodItems: uniqueFoodItems.length,
-        mappingsAdded: addedCount,
+        nutritionSaved: nutritionStats.saved,
+        nutritionSkipped: nutritionStats.skipped,
+        nutritionErrors: nutritionStats.errors.length,
         menuPeriod: {
           start: menuStartDate.toISOString(),
           end: menuEndDate.toISOString()
@@ -688,6 +701,65 @@ app.get('/api/meals', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch meal plans'
+    });
+  }
+});
+
+/**
+ * Get nutrition data for specific food items
+ */
+app.get('/api/nutrition', async (req, res) => {
+  try {
+    const { items } = req.query;
+    
+    if (!items) {
+      return res.status(400).json({
+        success: false,
+        message: 'No food items specified. Please provide comma-separated items in the query parameter.'
+      });
+    }
+    
+    // Parse the comma-separated food items
+    const foodItems = items.split(',').map(item => item.trim()).filter(Boolean);
+    
+    if (foodItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid food items provided.'
+      });
+    }
+    
+    // Import the Nutrition model
+    const Nutrition = mongoose.model('Nutrition');
+    
+    // Find nutrition data for each food item
+    const nutritionData = {};
+    
+    for (const item of foodItems) {
+      const result = await Nutrition.findOne({
+        $or: [
+          { name: { $regex: new RegExp('^' + item + '$', 'i') } },
+          { aliases: { $elemMatch: { $regex: new RegExp('^' + item + '$', 'i') } } }
+        ]
+      });
+      
+      if (result) {
+        nutritionData[item] = result;
+      } else {
+        nutritionData[item] = null;
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: nutritionData
+    });
+  } catch (error) {
+    console.error('Error fetching nutrition data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch nutrition data',
+      error: error.message
     });
   }
 });

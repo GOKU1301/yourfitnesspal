@@ -195,16 +195,71 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
       console.log(`ℹ️ No match with nutrition data found, using best match: "${matchName}"`);
     }
     
-    // Adjust threshold based on food type
-    const isLikelyIndianFood = isIndianFood(cleanedFoodItem);
-    const similarityThreshold = isLikelyIndianFood ? 0.6 : 0.7;
+    // Use a consistent threshold for all food types
+    const similarityThreshold = 0.7;
     
-    if (isLikelyIndianFood) {
-      console.log(`ℹ️ Detected likely Indian food, using lower threshold (${similarityThreshold})`);
-    }
+    // Note: We no longer use a lower threshold for Indian foods
     
     const bestMatchName = bestMatch.food_name || bestMatch.foodName || '';
     console.log(`✅ Best match: "${bestMatchName}" (similarity: ${bestSimilarity.toFixed(3)})`); 
+    
+    // Log the complete raw nutritional data structure from Nutritionix
+    console.log(`\n📊 RAW NUTRITIONIX API DATA for "${bestMatchName}":`);      
+    console.log(`- Food ID: ${bestMatch.food_name}`);      
+    console.log(`- Serving size: ${bestMatch.serving_qty} ${bestMatch.serving_unit} (${bestMatch.serving_weight_grams}g)`);      
+    console.log(`- Calories: ${bestMatch.nf_calories} kcal`);      
+    
+    // Check if data is in alt_measures or full_measures array
+    if (bestMatch.alt_measures && bestMatch.alt_measures.length > 0) {
+      console.log('\nFound alt_measures data:');
+      console.log(JSON.stringify(bestMatch.alt_measures.slice(0, 2), null, 2));
+    }
+    
+    // Check data structure - this field might have what we need
+    if (bestMatch.full_nutrients && bestMatch.full_nutrients.length > 0) {
+      console.log('\nFound full_nutrients data (first 3 entries):');
+      // console.log(JSON.stringify(bestMatch.full_nutrients.slice(0, 3), null, 2));
+      
+      // Map of attr_id to nutrient name
+      const NUTRIENT_IDS = {
+        203: 'protein',
+        204: 'fat',
+        205: 'carbs',
+        208: 'calories',
+        269: 'sugars',
+        291: 'fiber'
+      };
+      
+      // Extract nutrients from full_nutrients array
+      const nutrients = {};
+      bestMatch.full_nutrients.forEach(nutrient => {
+        if (NUTRIENT_IDS[nutrient.attr_id]) {
+          nutrients[NUTRIENT_IDS[nutrient.attr_id]] = nutrient.value;
+        }
+      });
+      
+      // console.log('\nExtracted nutrients from full_nutrients array:');
+      // console.log(JSON.stringify(nutrients, null, 2));
+      
+      // Update bestMatch with extracted nutrients
+      if (!bestMatch.nf_protein && nutrients.protein) bestMatch.nf_protein = nutrients.protein;
+      if (!bestMatch.nf_total_fat && nutrients.fat) bestMatch.nf_total_fat = nutrients.fat;
+      if (!bestMatch.nf_total_carbohydrate && nutrients.carbs) bestMatch.nf_total_carbohydrate = nutrients.carbs;
+      if (!bestMatch.nf_sugars && nutrients.sugars) bestMatch.nf_sugars = nutrients.sugars;
+      if (!bestMatch.nf_dietary_fiber && nutrients.fiber) bestMatch.nf_dietary_fiber = nutrients.fiber;
+    }
+    
+    // Log the potentially updated nutrients
+    console.log('\nFinal nutrient values:');
+    console.log(`- Protein: ${bestMatch.nf_protein || 'N/A'}g`);      
+    console.log(`- Carbohydrates: ${bestMatch.nf_total_carbohydrate || 'N/A'}g`);      
+    console.log(`- Fat: ${bestMatch.nf_total_fat || 'N/A'}g`);      
+    console.log(`- Fiber: ${bestMatch.nf_dietary_fiber || 'N/A'}g`);      
+    console.log(`- Sugars: ${bestMatch.nf_sugars || 'N/A'}g`);      
+    
+    // Show raw data structure fields
+    // console.log('\n📋 Available fields in the API response:');
+    // console.log(Object.keys(bestMatch).join(', '));      
     
     // Return the match if similarity is above threshold
     if (bestSimilarity >= similarityThreshold) {
@@ -421,8 +476,7 @@ async function getNutritionInfo(foodItem, useGeminiFallback = true) {
     // Extract nutrition data from Nutritionix API response
     const nutritionData = match.data.food || match.data;
     
-    // Log the full response for debugging
-    // console.log('Nutritionix API response:');
+    console.log('\n📊 Processing Nutritionix data for better nutrition extraction');
     
     // Common nutrient IDs in Nutritionix
     const NUTRIENT_IDS = {
@@ -434,31 +488,62 @@ async function getNutritionInfo(foodItem, useGeminiFallback = true) {
       CALORIES: 208
     };
     
-    // Helper to find nutrient by attribute ID in full_nutrients array
-    const getNutrientValue = (data, possibleFields, attrId = null) => {
+    // Extract nutrients from full_nutrients array first
+    const extractedNutrients = {};
+    
+    if (nutritionData.full_nutrients && Array.isArray(nutritionData.full_nutrients)) {
+      console.log(`Found ${nutritionData.full_nutrients.length} nutrients in full_nutrients array`);
+      
+      // Process the full_nutrients array
+      nutritionData.full_nutrients.forEach(nutrient => {
+        const { attr_id, value } = nutrient;
+        
+        // Map to standard nutrient names
+        switch (attr_id) {
+          case NUTRIENT_IDS.PROTEIN:
+            extractedNutrients.protein = value;
+            break;
+          case NUTRIENT_IDS.CARBS:
+            extractedNutrients.carbs = value;
+            break;
+          case NUTRIENT_IDS.FAT:
+            extractedNutrients.fat = value;
+            break;
+          case NUTRIENT_IDS.FIBER:
+            extractedNutrients.fiber = value;
+            break;
+          case NUTRIENT_IDS.SUGAR:
+            extractedNutrients.sugar = value;
+            break;
+          case NUTRIENT_IDS.CALORIES:
+            extractedNutrients.calories = value;
+            break;
+        }
+      });
+      
+      console.log('Extracted nutrients from full_nutrients array:');
+      console.log(extractedNutrients);
+    }
+    
+    // Helper to find nutrient by attribute ID or direct field
+    const getNutrientValue = (possibleFields, attrId = null) => {
       // First try direct fields
       for (const field of possibleFields) {
-        if (data[field] !== undefined) {
-          return data[field];
+        if (nutritionData[field] !== undefined) {
+          return nutritionData[field];
         }
       }
       
-      // Then try full_nutrients array if available
-      if (data.full_nutrients && Array.isArray(data.full_nutrients)) {
-        // If specific attribute ID is provided, use it
-        if (attrId !== null) {
-          const nutrient = data.full_nutrients.find(n => n.attr_id === attrId);
-          if (nutrient) return nutrient.value;
+      // Then try our extracted nutrients
+      for (const nutrientKey of Object.keys(extractedNutrients)) {
+        if (possibleFields.some(field => field.toLowerCase().includes(nutrientKey))) {
+          return extractedNutrients[nutrientKey];
         }
-        
-        // Otherwise try to find by name in the full_nutrients array
-        for (const field of possibleFields) {
-          const fieldLower = field.toLowerCase();
-          const nutrient = data.full_nutrients.find(n => 
-            n.name && n.name.toLowerCase().includes(fieldLower)
-          );
-          if (nutrient) return nutrient.value;
-        }
+      }
+      
+      // If we have the specific nutrient from extraction, use it
+      if (attrId && extractedNutrients[Object.keys(NUTRIENT_IDS).find(key => NUTRIENT_IDS[key] === attrId)?.toLowerCase()]) {
+        return extractedNutrients[Object.keys(NUTRIENT_IDS).find(key => NUTRIENT_IDS[key] === attrId)?.toLowerCase()];
       }
       
       return 0; // Default to 0 if not found
@@ -489,12 +574,12 @@ async function getNutritionInfo(foodItem, useGeminiFallback = true) {
     }
     
     // Get nutrition values
-    const calories = getNutrientValue(nutritionData, ['nf_calories', 'calories', 'cal'], NUTRIENT_IDS.CALORIES);
-    const protein = getNutrientValue(nutritionData, ['nf_protein', 'protein', 'proteins'], NUTRIENT_IDS.PROTEIN);
-    const carbs = getNutrientValue(nutritionData, ['nf_total_carbohydrate', 'carbs', 'carbohydrates', 'total_carbohydrate'], NUTRIENT_IDS.CARBS);
-    const fat = getNutrientValue(nutritionData, ['nf_total_fat', 'fat', 'total_fat'], NUTRIENT_IDS.FAT);
-    const fiber = getNutrientValue(nutritionData, ['nf_dietary_fiber', 'fiber', 'dietary_fiber'], NUTRIENT_IDS.FIBER);
-    const sugar = getNutrientValue(nutritionData, ['nf_sugars', 'sugar', 'sugars'], NUTRIENT_IDS.SUGAR);
+    const calories = getNutrientValue(['nf_calories', 'calories', 'cal'], NUTRIENT_IDS.CALORIES);
+    const protein = getNutrientValue(['nf_protein', 'protein', 'proteins'], NUTRIENT_IDS.PROTEIN);
+    const carbs = getNutrientValue(['nf_total_carbohydrate', 'carbs', 'carbohydrates', 'total_carbohydrate'], NUTRIENT_IDS.CARBS);
+    const fat = getNutrientValue(['nf_total_fat', 'fat', 'total_fat'], NUTRIENT_IDS.FAT);
+    const fiber = getNutrientValue(['nf_dietary_fiber', 'fiber', 'dietary_fiber'], NUTRIENT_IDS.FIBER);
+    const sugar = getNutrientValue(['nf_sugars', 'sugar', 'sugars'], NUTRIENT_IDS.SUGAR);
     
     // Log the extracted values for debugging
     // console.log('Extracted nutrition values:', {
@@ -520,7 +605,10 @@ async function getNutritionInfo(foodItem, useGeminiFallback = true) {
         carbohydrates_total_g: Math.round(carbs * 100) / 100,
         fat_total_g: Math.round(fat * 100) / 100,
         fiber_g: Math.round(fiber * 100) / 100,
-        sugar_g: Math.round(sugar * 100) / 100
+        sugar_g: Math.round(sugar * 100) / 100,
+        // Save the original serving unit information for better portion handling
+        serving_qty: nutritionData.serving_qty || 1,
+        serving_unit: nutritionData.serving_unit || 'g'
       },
       // Include the full match data for debugging
       _fullData: match.data

@@ -1,3 +1,4 @@
+
 // Mock data for different scenarios
 export const mockMealData = {
   // Normal meal with items
