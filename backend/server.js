@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.js';
 import { verifyToken, isAdmin } from './middleware/auth.js';
 import mongoose from 'mongoose';
 import Meal from './models/Meal.js';
+import { findStandardFoodName } from './utils/foodMapping.js';
 
 // Connect to MongoDB
 async function connectDB() {
@@ -705,12 +706,20 @@ app.get('/api/meals', verifyToken, async (req, res) => {
   }
 });
 
+console.log('Registering /api/nutrition route');
+
 /**
  * Get nutrition data for specific food items
  */
 app.get('/api/nutrition', async (req, res) => {
+  console.log('==========================================');
+  console.log('BASIC LOG: Entered /api/nutrition route handler');
+  console.log('BASIC LOG: Query params:', req.query);
+  
   try {
+    console.log('Handling /api/nutrition request with query:', req.query);
     const { items } = req.query;
+    console.log('Items received:', items);
     
     if (!items) {
       return res.status(400).json({
@@ -730,22 +739,85 @@ app.get('/api/nutrition', async (req, res) => {
     }
     
     // Import the Nutrition model
-    const Nutrition = mongoose.model('Nutrition');
+    let Nutrition;
+    try {
+      // Check if model is already registered
+      Nutrition = mongoose.model('Nutrition');
+      console.log('Nutrition model retrieved successfully');
+    } catch (modelError) {
+      console.error('Error getting Nutrition model:', modelError.message);
+      
+      // Define the model if it doesn't exist
+      console.log('Attempting to define Nutrition model...');
+      const nutritionSchema = new mongoose.Schema({
+        name: String,
+        aliases: [String],
+        category: String,
+        servings: [{
+          size: String,
+          calories: Number,
+          protein: Number,
+          carbs: Number,
+          fat: Number
+        }]
+      });
+      
+      Nutrition = mongoose.model('Nutrition', nutritionSchema);
+      console.log('Nutrition model defined successfully');
+    }
+    
+    // Log all collections in the database
+    console.log('Available collections:');
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    collections.forEach(collection => console.log('- ' + collection.name));
+    
+    // Count documents in the Nutrition collection
+    const count = await Nutrition.countDocuments();
+    console.log(`Total documents in Nutrition collection: ${count}`);
+    
+    // Get a sample document to verify structure
+    const sampleDoc = await Nutrition.findOne();
+    console.log('Sample nutrition document:', JSON.stringify(sampleDoc, null, 2));
     
     // Find nutrition data for each food item
     const nutritionData = {};
     
     for (const item of foodItems) {
-      const result = await Nutrition.findOne({
+      console.log(`Searching for nutrition data for item: "${item}"`);
+      
+      // Create the query
+      const query = {
         $or: [
           { name: { $regex: new RegExp('^' + item + '$', 'i') } },
           { aliases: { $elemMatch: { $regex: new RegExp('^' + item + '$', 'i') } } }
         ]
-      });
+      };
+      
+      console.log('Query:', JSON.stringify(query));
+      
+      // Try a more flexible search first to see what's available
+      const similarItems = await Nutrition.find({ 
+        $or: [
+          { name: { $regex: new RegExp(item, 'i') } },
+          { aliases: { $elemMatch: { $regex: new RegExp(item, 'i') } } }
+        ]
+      }).limit(5);
+      
+      if (similarItems.length > 0) {
+        console.log(`Found ${similarItems.length} similar items:`);
+        similarItems.forEach(doc => console.log(`- ${doc.name}`));
+      } else {
+        console.log('No similar items found');
+      }
+      
+      // Execute the exact match query
+      const result = await Nutrition.findOne(query);
       
       if (result) {
+        console.log(`Found exact match for "${item}": ${result.name}`);
         nutritionData[item] = result;
       } else {
+        console.log(`No exact match found for "${item}"`);
         nutritionData[item] = null;
       }
     }
@@ -762,6 +834,35 @@ app.get('/api/nutrition', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Debug endpoint to list all registered routes
+app.get('/debug/routes', (req, res) => {
+  const routes = [];
+  
+  function printRoutes(layer) {
+    if (layer.route) {
+      // Routes registered directly on the app
+      layer.route.stack.forEach(printRoutes);
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      // Router middleware (like auth routes)
+      layer.handle.stack.forEach(printRoutes);
+    } else if (layer.route) {
+      // Routes registered with app.route()
+      const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+      routes.push(`${methods} ${layer.route.path}`);
+    } else if (layer.path) {
+      // Regular routes
+      routes.push(`GET ${layer.path}`);
+    }
+  }
+  
+  app._router.stack.forEach(printRoutes);
+  
+  res.json({
+    message: 'Registered routes',
+    routes: routes.sort()
+  });
 });
 
 // Error handling middleware
