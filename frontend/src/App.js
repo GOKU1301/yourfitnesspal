@@ -27,9 +27,9 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>YourFitnessPal</h1>
-        {isAuthenticated && (
+        {window.location.pathname !== '/' && (
           <button 
-            onClick={() => navigate('/admin/dashboard')} 
+            onClick={() => navigate('/')} 
             className="btn btn-secondary"
           >
             Dashboard

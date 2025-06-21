@@ -84,6 +84,23 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.static('public'));
+// Serve images directory as static files
+const imagesPath = path.join(__dirname, 'images');
+console.log('Images directory path:', imagesPath); // Debug path resolution
+app.use('/images', express.static(imagesPath));
+
+// Direct route to serve timetable image (for debugging)
+app.get('/timetable-image', (req, res) => {
+  const imagePath = path.join(__dirname, 'images', 'currenttimetable.jpeg');
+  console.log('Trying to serve image from:', imagePath);
+  fs.access(imagePath, fs.constants.F_OK, (err) => {
+    if (err) {
+      console.error('Image file not accessible:', err);
+      return res.status(404).send('Image not found');
+    }
+    res.sendFile(imagePath);
+  });
+});
 
 // Log all requests for debugging
 app.use((req, res, next) => {

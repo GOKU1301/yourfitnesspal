@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { FaUpload } from 'react-icons/fa';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -63,13 +64,16 @@ const Login = () => {
 
   return (
     <div className="login-container">
-      <div className="login-box">
-        <h2>Admin Login</h2>
-        <p className="login-subtitle">Please enter your admin credentials to continue</p>
-        {error && <div className="alert alert-danger">{error}</div>}
+      <div className="login-box dashboard-card" style={{background:'#191c23',color:'#fff',borderRadius:'18px',boxShadow:'0 2px 16px rgba(0,0,0,0.18)',border:'1px solid #21253a',maxWidth:'420px'}}>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:'1.1rem'}}>
+          <FaUpload size={48} color="#4a90e2" style={{marginBottom:'0.5rem'}} />
+          <h2 style={{marginBottom:'0.3rem',color:'#fff'}}>Upload Timetable</h2>
+          <p className="login-subtitle" style={{color:'#bfc5d2',fontSize:'1.08rem'}}>Admin login required to upload</p>
+        </div>
+        {error && <div className="alert alert-danger" style={{background:'#2c1a1a',color:'#f87171',borderRadius:'8px',padding:'0.7em',marginBottom:'1em'}}>{error}</div>}
         <form onSubmit={onSubmit}>
-          <div className="form-group">
-            <label>Email</label>
+          <div className="form-group" style={{marginBottom:'1.3rem'}}>
+            <label style={{color:'#bfc5d2',fontWeight:500}}>Email</label>
             <input
               type="email"
               name="email"
@@ -77,7 +81,7 @@ const Login = () => {
               onChange={onChange}
               required
               className="form-control"
-            />
+              style={{background:'#23263a',color:'#fff',border:'1px solid #23263a',borderRadius:'8px',fontSize:'1.08rem',padding:'0.8em',marginTop:'0.4em'}} />
           </div>
           <div className="form-group">
             <label>Password</label>

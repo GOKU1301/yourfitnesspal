@@ -283,110 +283,46 @@ const AdminDashboard = () => {
         <div className="dashboard-header">
           <h2>Admin Dashboard</h2>
           <button 
+            className="logout-btn"
             onClick={handleLogout}
-            className="btn btn-logout"
-            disabled={isLoading}
-          >
+            style={{background:'#dc3545',color:'#fff',borderRadius:'8px',padding:'0.5em 1.3em',fontWeight:600,border:'none',fontSize:'1rem',marginLeft:'1rem'}}>
             Logout
           </button>
         </div>
-        
-        <div className="dashboard-content">
-          <div className="upload-section">
-            <h3>Upload Timetable</h3>
-            <p>Upload an image of your college meal timetable to process it.</p>
-            
-            <div className="file-input-container">
-              <input
-                type="file"
-                id="file-upload"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/*"
-                capture="environment"
-                className="file-input"
-                disabled={isLoading}
-                aria-label="Upload timetable image"
-                title="Select an image file to upload"
-              />
-              <label 
-                htmlFor="file-upload" 
-                className={`btn-upload ${isLoading ? 'upload-disabled' : ''}`}
-                aria-disabled={isLoading}
-              >
-                <span className="file-name">
-                  {selectedFile ? (
-                    <>
-                      <span className="file-icon">📄</span>
-                      <span className="file-name-text" title={selectedFile.name}>
-                        {selectedFile.name.length > 30 
-                          ? `${selectedFile.name.substring(0, 15)}...${selectedFile.name.substring(selectedFile.name.lastIndexOf('.'))}`
-                          : selectedFile.name}
-                      </span>
-                      <span className="file-size">
-                        (${(selectedFile.size / 1024).toFixed(1)} KB)
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="upload-icon">📁</span>
-                      <span className="upload-text">Choose a file...</span>
-                    </>
-                  )}
-                </span>
-                {!selectedFile && !isLoading && (
-                  <span className="browse-text">Browse</span>
-                )}
-                {isLoading && <span className="uploading-text">Uploading...</span>}
-              </label>
+        <div style={{background:'#191c23',color:'#fff',borderRadius:'14px',boxShadow:'0 2px 12px rgba(0,0,0,0.14)',border:'1px solid #23263a',maxWidth:'480px',margin:'0 auto',padding:'2.2rem 1.5rem',display:'flex',flexDirection:'column',gap:'2rem'}}>
+          <label htmlFor="timetable-upload" style={{background:'#22223b',border:'2px dashed #4a90e2',color:'#bfc5d2',borderRadius:'10px',padding:'1.1rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',fontWeight:500}}>
+            <span style={{marginRight:'0.7rem',fontSize:'1.3rem'}}>📁</span>
+            {selectedFile ? selectedFile.name : 'Choose a file...'}
+            <input
+              id="timetable-upload"
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              className="file-input"
+              onChange={handleFileChange}
+              style={{display:'none'}}
+            />
+            <span style={{background:'#23263a',color:'#4a90e2',padding:'0.5em 1.1em',borderRadius:'8px',marginLeft:'1.5rem',fontWeight:600}}>Browse</span>
+          </label>
+          {previewUrl && (
+            <div style={{margin:'1.1rem 0',textAlign:'center'}}>
+              <img src={previewUrl} alt="Preview" style={{maxWidth:'100%',maxHeight:'220px',borderRadius:'10px',border:'1px solid #23263a'}} />
             </div>
-            
-            {previewUrl && (
-              <div className="preview-container">
-                <h4>Image Preview:</h4>
-                <img src={previewUrl} alt="Preview" className="preview-image" />
-              </div>
-            )}
-            
-            <div className="button-container">
-              <button
-                onClick={handleUpload}
-                disabled={!selectedFile || isLoading}
-                className="btn btn-primary upload-button"
-              >
-                {isLoading ? (
-                  <>
-                    <ButtonSpinner />
-                    {message.text || 'Processing...'}
-                  </>
-                ) : (
-                  'Upload Timetable'
-                )}
-              </button>
-            </div>
-            
-            {message.text && (
-              <div className={`alert alert-${message.type} ${message.type === 'info' ? 'alert-info' : ''}`}>
-                {message.text}
-              </div>
-            )}
-            
-            <div className="upload-tips">
-              <h4>Tips for best results:</h4>
-              <ul>
-                <li>Use a well-lit area when taking photos of the timetable</li>
-                <li>Ensure the entire timetable is visible in the image</li>
-                <li>Supported formats: JPG, PNG (max 5MB)</li>
-              </ul>
-            </div>
-          </div>
+          )}
+          <button 
+            className="upload-button"
+            onClick={handleUpload}
+            disabled={isLoading || !selectedFile}
+            style={{background:'#4a90e2',color:'#fff',border:'none',borderRadius:'8px',padding:'0.9em 1.7em',fontWeight:600,fontSize:'1.08rem',width:'100%',boxShadow:'0 1.5px 6px rgba(76,110,245,0.07)'}}
+          >
+            Upload Timetable
+          </button>
         </div>
       </div>
     </ErrorBoundary>
   );
-};
+}
 
-// Add PropTypes for better documentation
 AdminDashboard.propTypes = {
   // Add any props if needed in the future
 };

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FaUtensils, FaUtensilSpoon, FaUser, FaPlus, FaMinus, FaSpinner, FaCalculator } from 'react-icons/fa';
+import { FaUtensils, FaUtensilSpoon, FaUser, FaPlus, FaMinus, FaSpinner, FaCalculator, FaHome } from 'react-icons/fa';
+import { MdRestaurant } from 'react-icons/md';
+import { Link } from 'react-router-dom';
 
 const NutritionPage = () => {
   const [activeTab, setActiveTab] = useState('current');
@@ -18,6 +20,7 @@ const NutritionPage = () => {
   const [useMockData, setUseMockData] = useState(false); // Toggle between mock and real API
   const [totalNutrition, setTotalNutrition] = useState(null);
   const [showTotalNutrition, setShowTotalNutrition] = useState(false);
+  const [selectedServingSizes, setSelectedServingSizes] = useState({});
   
   // Fetch nutrition data for food items
   const fetchNutritionData = async (items) => {
@@ -154,7 +157,7 @@ const NutritionPage = () => {
   const handleQuantityChange = (item, change) => {
     setQuantities(prev => ({
       ...prev,
-      [item]: Math.max(0, (prev[item] || 0) + change)
+      [item]: Math.max(0, parseFloat(((prev[item] || 0) + change).toFixed(1)))
     }));
     
     // Hide total nutrition when quantities change
@@ -163,7 +166,20 @@ const NutritionPage = () => {
     }
   };
   
-  // Calculate total nutrition based on selected quantities
+  // Handle serving size selection
+  const handleServingSizeChange = (item, size) => {
+    setSelectedServingSizes(prev => ({
+      ...prev,
+      [item]: size
+    }));
+    
+    // Hide total nutrition when serving sizes change
+    if (showTotalNutrition) {
+      setShowTotalNutrition(false);
+    }
+  };
+  
+  // Calculate total nutrition based on selected quantities and serving sizes
   const calculateTotalNutrition = () => {
     const totals = {
       calories: 0,
@@ -178,8 +194,10 @@ const NutritionPage = () => {
       if (quantity > 0 && nutritionData[item]) {
         const itemNutrition = nutritionData[item];
         
-        // Get the medium serving size (or small if medium doesn't exist)
-        const serving = itemNutrition.servings.find(s => s.size === 'medium') || 
+        // Get the selected serving size (or default to medium/small if not selected)
+        const selectedSize = selectedServingSizes[item] || 'medium';
+        const serving = itemNutrition.servings.find(s => s.size === selectedSize) || 
+                       itemNutrition.servings.find(s => s.size === 'medium') || 
                        itemNutrition.servings.find(s => s.size === 'small');
         
         if (serving) {
@@ -259,53 +277,40 @@ const NutritionPage = () => {
   // };
 
   return (
-    <div className="nutrition-page">
-      <div className="nutrition-header">
-        <h1><FaUtensils /> Nutrition Tracker</h1>
-        <div className="nutrition-tabs">
+    <div className="nutrition-page modern-nutrition">
+      {/* No custom header here; rely on global app-header */}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button 
-            className={`tab ${activeTab === 'current' ? 'active' : ''}`}
+            className={`tab modern-tab ${activeTab === 'current' ? 'active' : ''}`}
             onClick={() => setActiveTab('current')}
+            aria-label="Current Meal"
+            style={{ marginRight: 16 }}
           >
-            <FaUtensils /> Current
+            <FaUtensils /> Current Meal
           </button>
           <button 
-            className={`tab ${activeTab === 'next' ? 'active' : ''}`}
+            className={`tab modern-tab ${activeTab === 'next' ? 'active' : ''}`}
             onClick={() => setActiveTab('next')}
+            aria-label="Next Meal"
           >
-            <FaUtensilSpoon /> Next
-          </button>
-          <button 
-            className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
-          >
-            <FaUser /> Profile
+            <FaUtensilSpoon /> Next Meal
           </button>
         </div>
-        <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button 
             onClick={handleRefresh} 
-            className="refresh-btn"
+            className="refresh-btn modern-btn"
             disabled={loading}
-            style={{
-              padding: '5px 10px',
-              background: '#4CAF50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              opacity: loading ? 0.7 : 1,
-              pointerEvents: loading ? 'none' : 'auto'
-            }}
+            aria-label="Refresh Meal Data"
+            style={{background: 'var(--success-color)', minWidth: 120}}
           >
             <FaSpinner className={loading ? 'spinning' : ''} />
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
           {useMockData && (
-            <span style={{ color: '#666', fontSize: '0.9em' }}>
+            <span className="mock-data-indicator">
               Using Mock Data (for testing)
             </span>
           )}
@@ -332,15 +337,15 @@ const NutritionPage = () => {
             { type: 'dinner', start: 19 * 60, end: 22 * 60 }
           ];
           const currentWindow = windows.find(w => currentMinutes >= w.start && currentMinutes < w.end);
-          const isMealTime = !!currentWindow && currentMeal.type === currentWindow.type;
-
+          // const isMealTime = !!currentWindow && currentMeal.type === currentWindow.type;
+          const isMealTime=true;
           if (activeTab === 'current') {
             if (isMealTime) {
               // Show current meal
               return (
                 <>
-                  <div className="meal-header">
-                    <h2>{formatDayName(currentMeal.day)} - {currentMeal.type.charAt(0).toUpperCase() + currentMeal.type.slice(1)}</h2>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <h2 style={{ margin: 0 }}>{formatDayName(currentMeal.day)} - {currentMeal.type.charAt(0).toUpperCase() + currentMeal.type.slice(1)}</h2>
                     <div className="current-time">{formatTimeWithAmPm(currentMeal.currentTime)}</div>
                   </div>
                   <div className="meal-cards">
@@ -350,11 +355,13 @@ const NutritionPage = () => {
                         const itemNutrition = nutritionData[item];
                         const quantity = quantities[item] || 0;
                         
-                        // Get the medium serving (or small if medium doesn't exist)
-                        const serving = itemNutrition?.servings?.find(s => s.size === 'medium') || 
+                        // Get the selected serving size (or default to medium/small if not selected)
+                        const selectedSize = selectedServingSizes[item] || 'medium';
+                        const serving = itemNutrition?.servings?.find(s => s.size === selectedSize) || 
+                                       itemNutrition?.servings?.find(s => s.size === 'medium') || 
                                        itemNutrition?.servings?.find(s => s.size === 'small');
                         
-                        // Calculate nutrition based on quantity
+                        // Calculate nutrition based on quantity and selected serving size
                         const calculatedNutrition = {
                           calories: serving ? Math.round((serving.calories || 0) * quantity * 10) / 10 : 0,
                           protein: serving ? Math.round((serving.protein || 0) * quantity * 10) / 10 : 0,
@@ -364,21 +371,47 @@ const NutritionPage = () => {
                         
                         return (
                           <div key={index} className="meal-card">
-                            <div className="meal-item">{item.trim() || 'Not specified'}</div>
+                            <div className="meal-item dish-name">{item.trim() || 'Not specified'}</div>
                             
                             {/* Nutrition info section */}
-                            <div className="nutrition-info" style={{ fontSize: '0.9em', color: '#666', margin: '8px 0' }}>
+                            <div className="nutrition-info">
                               {loadingNutrition ? (
                                 <div>Loading nutrition data...</div>
                               ) : itemNutrition ? (
                                 <div>
-                                  <div><strong>Calories:</strong> {calculatedNutrition.calories}</div>
-                                  <div><strong>Protein:</strong> {calculatedNutrition.protein}g</div>
-                                  <div><strong>Carbs:</strong> {calculatedNutrition.carbs}g</div>
-                                  <div><strong>Fat:</strong> {calculatedNutrition.fat}g</div>
+                                  <div><span className="macro-label">Calories:</span> <span className="macro-value">{calculatedNutrition.calories}</span></div>
+                                  <div><span className="macro-label">Protein:</span> <span className="macro-value">{calculatedNutrition.protein}g</span></div>
+                                  <div><span className="macro-label">Carbs:</span> <span className="macro-value">{calculatedNutrition.carbs}g</span></div>
+                                  <div><span className="macro-label">Fat:</span> <span className="macro-value">{calculatedNutrition.fat}g</span></div>
                                   {serving && <div style={{fontSize: '0.8em', marginTop: '4px', color: '#888'}}>
                                     ({serving.portion_label || serving.size})
                                   </div>}
+                                  
+                                  {/* Serving size selection */}
+                                  {itemNutrition?.servings && itemNutrition.servings.length > 0 && (
+                                    <div className="serving-size-selector" style={{marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                                      <div style={{fontSize: '0.9em', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                        <MdRestaurant /> Serving Size:
+                                      </div>
+                                      <div style={{display: 'flex', gap: '5px', flexWrap: 'wrap'}}>
+                                        {['small', 'medium', 'large'].map(size => {
+                                          // Check if this size exists in the servings data
+                                          const sizeExists = itemNutrition.servings.some(s => s.size === size);
+                                          if (!sizeExists) return null;
+                                          
+                                          return (
+                                            <button 
+                                              key={size}
+                                              onClick={() => handleServingSizeChange(item, size)}
+                                              className={`serving-size-btn${selectedServingSizes[item] === size ? ' active' : ''}`}
+                                            >
+                                              {size.charAt(0).toUpperCase() + size.slice(1)}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <div>No nutrition data available</div>
@@ -386,21 +419,37 @@ const NutritionPage = () => {
                             </div>
                             
                             {/* Quantity controls */}
-                            <div className="quantity-controls">
+                            <div className="quantity-controls" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                               <button 
                                 onClick={() => handleQuantityChange(item, -1)}
                                 className="quantity-btn"
-                                aria-label={`Decrease quantity of ${item}`}
+                                aria-label={`Decrease quantity of ${item} by 1`}
                               >
-                                <FaMinus />
+                                <FaMinus /> 1
                               </button>
-                              <span className="quantity">{quantity}</span>
+                              <button 
+                                onClick={() => handleQuantityChange(item, -0.5)}
+                                className="quantity-btn"
+                                aria-label={`Decrease quantity of ${item} by 0.5`}
+                                style={{ fontSize: '0.85em' }}
+                              >
+                                <FaMinus /> 0.5
+                              </button>
+                              <span className="quantity" style={{ minWidth: '30px', textAlign: 'center' }}>{parseFloat(quantity).toFixed(1)}</span>
+                              <button 
+                                onClick={() => handleQuantityChange(item, 0.5)}
+                                className="quantity-btn"
+                                aria-label={`Increase quantity of ${item} by 0.5`}
+                                style={{ fontSize: '0.85em' }}
+                              >
+                                <FaPlus /> 0.5
+                              </button>
                               <button 
                                 onClick={() => handleQuantityChange(item, 1)}
                                 className="quantity-btn"
-                                aria-label={`Increase quantity of ${item}`}
+                                aria-label={`Increase quantity of ${item} by 1`}
                               >
-                                <FaPlus />
+                                <FaPlus /> 1
                               </button>
                             </div>
                           </div>
@@ -436,23 +485,52 @@ const NutritionPage = () => {
                     {showTotalNutrition && totalNutrition && (
                       <div 
                         style={{
-                          marginTop: '20px',
-                          padding: '15px',
-                          backgroundColor: '#f8f9fa',
-                          borderRadius: '8px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                          maxWidth: '400px',
-                          width: '100%'
+                          marginTop: '30px',
+                          padding: '20px',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '12px',
+                          boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                          maxWidth: '450px',
+                          width: '100%',
+                          border: '1px solid #e0e0e0'
                         }}
                       >
-                        <h3 style={{ marginTop: 0, color: '#333', textAlign: 'center' }}>Total Nutrition</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                          <div><strong>Calories:</strong> {totalNutrition.calories} kcal</div>
-                          <div><strong>Protein:</strong> {totalNutrition.protein}g</div>
-                          <div><strong>Carbs:</strong> {totalNutrition.carbs}g</div>
-                          <div><strong>Fat:</strong> {totalNutrition.fat}g</div>
-                          {totalNutrition.fiber > 0 && <div><strong>Fiber:</strong> {totalNutrition.fiber}g</div>}
-                          {totalNutrition.sugar > 0 && <div><strong>Sugar:</strong> {totalNutrition.sugar}g</div>}
+                        <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#222222', textAlign: 'center', fontSize: '24px', fontWeight: '700' }}>Total Nutrition</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '18px' }}>
+                          <div style={{ padding: '8px', backgroundColor: '#f5f9ff', borderRadius: '8px' }}>
+                            <span style={{ color: '#333', fontWeight: 'bold' }}>Calories:</span> 
+                            <span style={{ color: '#1976d2', fontWeight: '600', marginLeft: '5px' }}>{totalNutrition.calories}</span>
+                            <span style={{ color: '#555' }}> kcal</span>
+                          </div>
+                          <div style={{ padding: '8px', backgroundColor: '#f5f9ff', borderRadius: '8px' }}>
+                            <span style={{ color: '#333', fontWeight: 'bold' }}>Protein:</span> 
+                            <span style={{ color: '#1976d2', fontWeight: '600', marginLeft: '5px' }}>{totalNutrition.protein}</span>
+                            <span style={{ color: '#555' }}>g</span>
+                          </div>
+                          <div style={{ padding: '8px', backgroundColor: '#f5f9ff', borderRadius: '8px' }}>
+                            <span style={{ color: '#333', fontWeight: 'bold' }}>Carbs:</span> 
+                            <span style={{ color: '#1976d2', fontWeight: '600', marginLeft: '5px' }}>{totalNutrition.carbs}</span>
+                            <span style={{ color: '#555' }}>g</span>
+                          </div>
+                          <div style={{ padding: '8px', backgroundColor: '#f5f9ff', borderRadius: '8px' }}>
+                            <span style={{ color: '#333', fontWeight: 'bold' }}>Fat:</span> 
+                            <span style={{ color: '#1976d2', fontWeight: '600', marginLeft: '5px' }}>{totalNutrition.fat}</span>
+                            <span style={{ color: '#555' }}>g</span>
+                          </div>
+                          {totalNutrition.fiber > 0 && (
+                            <div style={{ padding: '8px', backgroundColor: '#f5f9ff', borderRadius: '8px' }}>
+                              <span style={{ color: '#333', fontWeight: 'bold' }}>Fiber:</span> 
+                              <span style={{ color: '#1976d2', fontWeight: '600', marginLeft: '5px' }}>{totalNutrition.fiber}</span>
+                              <span style={{ color: '#555' }}>g</span>
+                            </div>
+                          )}
+                          {totalNutrition.sugar > 0 && (
+                            <div style={{ padding: '8px', backgroundColor: '#f5f9ff', borderRadius: '8px' }}>
+                              <span style={{ color: '#333', fontWeight: 'bold' }}>Sugar:</span> 
+                              <span style={{ color: '#1976d2', fontWeight: '600', marginLeft: '5px' }}>{totalNutrition.sugar}</span>
+                              <span style={{ color: '#555' }}>g</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
