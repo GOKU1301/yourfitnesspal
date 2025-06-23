@@ -14,20 +14,42 @@ async function processAndStoreNutrition(foodItems = []) {
   let saved = 0;
   let skipped = 0;
   const errors = [];
+  const processedItems = [];
 
   // Remove duplicates & trim
   const unique = [...new Set(foodItems.map(f => (f || '').trim()).filter(Boolean))];
   console.log(`[NutritionPipeline] Processing ${unique.length} unique items:`, unique);
 
+  // First, check all items in database to avoid unnecessary API calls
+  console.log('[NutritionPipeline] Checking database for existing items...');
+  const itemsToProcess = [];
+  
   for (const item of unique) {
     try {
       // Check if already in MongoDB
+      console.log(`[DB Check] Checking if "${item}" exists in database...`);
       const existing = await saveNutritionToDb({ name: item, checkOnly: true });
+      
       if (existing && existing._id) {
-        console.log(`[NutritionPipeline] Skipped (already in DB): "${item}"`);
+        console.log(`✅ [NutritionPipeline] SKIPPED: "${item}" - already exists in database with ID: ${existing._id}`);
+        processedItems.push(item);
         skipped++;
-        continue;
+      } else {
+        // Add to items that need API processing
+        itemsToProcess.push(item);
       }
+    } catch (dbError) {
+      console.error(`[DB Check Error] Failed to check "${item}" in database:`, dbError.message);
+      // Still add to items to process
+      itemsToProcess.push(item);
+    }
+  }
+  
+  console.log(`[NutritionPipeline] Found ${skipped} items in database, ${itemsToProcess.length} items need processing`);
+  
+  // Process items not found in database
+  for (const item of itemsToProcess) {
+    try {
 
       // Try to get nutrition from Nutritionix first
       const nutritionixResult = await getNutritionInfo(item);
@@ -78,15 +100,15 @@ async function processAndStoreNutrition(foodItems = []) {
             servings: [
               {
                 size: 'small',
-                portion_label: `1 piece`,
-                weight_g: base.serving_size_g,
+                portion_label: `1 Small Piece (30g)`,
+                weight_g: 30,
                 volume_ml: null,
-                calories: base.calories,
-                protein: base.protein_g,
-                carbs: base.carbohydrates_total_g,
-                fat: base.fat_total_g,
-                fiber: base.fiber_g,
-                sugar: base.sugar_g,
+                calories: Math.round(base.calories * (30 / base.serving_size_g) * 10) / 10,
+                protein: Math.round(base.protein_g * (30 / base.serving_size_g) * 10) / 10,
+                carbs: Math.round(base.carbohydrates_total_g * (30 / base.serving_size_g) * 10) / 10,
+                fat: Math.round(base.fat_total_g * (30 / base.serving_size_g) * 10) / 10,
+                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * (30 / base.serving_size_g) * 10) / 10 : undefined,
+                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * (30 / base.serving_size_g) * 10) / 10 : undefined,
                 _source: 'nutritionix',
                 _originalServingSize: base.serving_size_g,
                 _originalCalories: base.calories,
@@ -94,15 +116,15 @@ async function processAndStoreNutrition(foodItems = []) {
               },
               {
                 size: 'medium',
-                portion_label: `2 pieces`,
-                weight_g: base.serving_size_g * 2,
+                portion_label: `1 Medium Piece (60g)`,
+                weight_g: 60,
                 volume_ml: null,
-                calories: Math.round(base.calories * 2 * 10) / 10,
-                protein: Math.round(base.protein_g * 2 * 10) / 10,
-                carbs: Math.round(base.carbohydrates_total_g * 2 * 10) / 10,
-                fat: Math.round(base.fat_total_g * 2 * 10) / 10,
-                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * 2 * 10) / 10 : undefined,
-                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * 2 * 10) / 10 : undefined,
+                calories: Math.round(base.calories * (60 / base.serving_size_g) * 10) / 10,
+                protein: Math.round(base.protein_g * (60 / base.serving_size_g) * 10) / 10,
+                carbs: Math.round(base.carbohydrates_total_g * (60 / base.serving_size_g) * 10) / 10,
+                fat: Math.round(base.fat_total_g * (60 / base.serving_size_g) * 10) / 10,
+                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * (60 / base.serving_size_g) * 10) / 10 : undefined,
+                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * (60 / base.serving_size_g) * 10) / 10 : undefined,
                 _source: 'nutritionix',
                 _originalServingSize: base.serving_size_g,
                 _originalCalories: base.calories,
@@ -110,15 +132,15 @@ async function processAndStoreNutrition(foodItems = []) {
               },
               {
                 size: 'large',
-                portion_label: `3 pieces`,
-                weight_g: base.serving_size_g * 3,
+                portion_label: `1 Large Piece (90g)`,
+                weight_g: 90,
                 volume_ml: null,
-                calories: Math.round(base.calories * 3 * 10) / 10,
-                protein: Math.round(base.protein_g * 3 * 10) / 10,
-                carbs: Math.round(base.carbohydrates_total_g * 3 * 10) / 10,
-                fat: Math.round(base.fat_total_g * 3 * 10) / 10,
-                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * 3 * 10) / 10 : undefined,
-                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * 3 * 10) / 10 : undefined,
+                calories: Math.round(base.calories * (90 / base.serving_size_g) * 10) / 10,
+                protein: Math.round(base.protein_g * (90 / base.serving_size_g) * 10) / 10,
+                carbs: Math.round(base.carbohydrates_total_g * (90 / base.serving_size_g) * 10) / 10,
+                fat: Math.round(base.fat_total_g * (90 / base.serving_size_g) * 10) / 10,
+                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * (90 / base.serving_size_g) * 10) / 10 : undefined,
+                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * (90 / base.serving_size_g) * 10) / 10 : undefined,
                 _source: 'nutritionix',
                 _originalServingSize: base.serving_size_g,
                 _originalCalories: base.calories,
@@ -127,86 +149,77 @@ async function processAndStoreNutrition(foodItems = []) {
             ]
           };
         } else {
-          // Standard flow - Ask Gemini for portion sizes
-          const prompt = `For the food item "${item}", provide typical small, medium, and large portion sizes using common Indian household measurements that a normal person would use without a kitchen scale.
-          the value of each portion be default to 1 and unit be increased as per the portions for eg 1 bowl of rice with small portion weighs 100g,1 bowl for medium portion weighs 200g and large 300g  this is just a sample example,y
-          IMPORTANT: Respond ONLY with a valid JSON object in this exact format:
-        {
-          "small": { "value": number, "unit": "unit_type" },
-          "medium": { "value": number, "unit": "unit_type" },
-          "large": { "value": number, "unit": "unit_type" },
-          "isLiquid": boolean  // true if this is a liquid item like milk, dal, etc.
-        }
-        
-        Use these units based on food type:
-        - For liquids (milk, dal, curry): "glass" (1 glass = 200ml) or "bowl" (1 bowl = 150ml)
-        - For rice, dal (dry): "katori" (1 katori = 100g) or "plate" (1 plate = 200g)
-        - For roti/paratha: "count" (number of pieces)
-        - For dry snacks: "katori" or "handful"
-        - For vegetables: "katori" or pieces
-        - For curd/raita: "katori" or "tbsp"
-        -For solid sweets : piece and size of piece
-        -For liquid sweets : cup with cup size mentioned in ml
-        
-        
-        Examples:
-        For "dal" (liquid):
-        {
-          "small": { "value": 1, "unit": "katori (100ml)" },
-          "medium": { "value": 1, "unit": "katori (200ml)" },
-          "large": { "value": 1, "unit": "katori (300ml)" },
-          "isLiquid": true
-        }
-        
-        For "rice":
-        {
-          "small": { "value": 1, "unit": "katori (50g)" },
-          "medium": { "value": 1, "unit": "katori (100g)" },
-          "large": { "value": 1, "unit": "katori (200g)" },
-          "isLiquid": false
-        }
-        
-        For "milk":
-        {
-          "small": { "value": 0.5, "unit": "glass (100ml)" },
-          "medium": { "value": 1, "unit": "glass (200ml)" },
-          "large": { "value": 1.5, "unit": "glasses (300ml)" },
-          "isLiquid": true
-        }
-        
-        For "roti":
-        {
-          "small": { "value": 1, "unit": "piece" },
-          "medium": { "value": 2, "unit": "pieces" },
-          "large": { "value": 3, "unit": "pieces" },
-          "isLiquid": false
-        }`;
-        let portionSizes;
-        try {
-          const geminiPortion = await gemini.model.generateContent(prompt);
-          const responseText = geminiPortion.response.text().trim();
+          // For non-piece foods, use the four plate sections directly
+          console.log(`[NutritionPipeline] Creating plate section servings for "${item}"`);
           
-          // Try to extract JSON from markdown code blocks if present
-          const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || 
-                          [null, responseText];
-          
-          try {
-            portionSizes = JSON.parse(jsonMatch[1] || responseText);
-          } catch (parseError) {
-            console.error(`[NutritionPipeline] Failed to parse Gemini response as JSON. Response was:`, responseText);
-            throw new Error('Invalid JSON response from Gemini');
-          }
-        } catch (err) {
-          console.error(`[NutritionPipeline] Gemini portion size error for "${item}":`, err.message);
-          // Fallback to reasonable defaults
-          portionSizes = {
-            small: 100,
-            medium: 200,
-            large: 300
+          // Define the four plate sections with their exact measurements from the reference image
+          const plateSections = {
+            side: { weight_g: 125, volume_ml: 130 },
+            center: { weight_g: 165, volume_ml: 170 },
+            narrow: { weight_g: 135, volume_ml: 140 },
+            main: { weight_g: 375, volume_ml: 380 }
           };
-          console.log(`[NutritionPipeline] Using default portion sizes for "${item}":`, portionSizes);
+          
+          // Determine if this is a liquid food
+          const isLiquid = isLiquidFood(item);
+          
+          // Create servings directly using the plate sections
+          const servingsArray = [];
+          
+          // For each plate section, create a serving
+          for (const [sectionName, measurements] of Object.entries(plateSections)) {
+            const weight_g = measurements.weight_g;
+            const volume_ml = isLiquid ? measurements.volume_ml : null;
+            
+            // Create proper portion label based on the reference image
+            const sectionLabel = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+            const portionLabel = isLiquid ? 
+              `${sectionLabel} Section (~${volume_ml}ml)` : 
+              `${sectionLabel} Section (~${weight_g}g)`;
+            
+            // Calculate nutrition values based on the weight
+            const calories = Math.round(base.calories * weight_g / base.serving_size_g);
+            const protein = Math.round(base.protein_g * weight_g / base.serving_size_g * 10) / 10;
+            const carbs = Math.round(base.carbohydrates_total_g * weight_g / base.serving_size_g * 10) / 10;
+            const fat = Math.round(base.fat_total_g * weight_g / base.serving_size_g * 10) / 10;
+            const fiber = base.fiber_g !== undefined ? Math.round(base.fiber_g * weight_g / base.serving_size_g * 10) / 10 : undefined;
+            const sugar = base.sugar_g !== undefined ? Math.round(base.sugar_g * weight_g / base.serving_size_g * 10) / 10 : undefined;
+            
+            // Add the serving to the array
+            servingsArray.push({
+              size: sectionName,
+              portion_label: portionLabel,
+              weight_g: weight_g,
+              volume_ml: volume_ml,
+              calories: calories,
+              protein: protein,
+              carbs: carbs,
+              fat: fat,
+              fiber: fiber,
+              sugar: sugar,
+              _source: 'nutritionix',
+              _originalServingSize: base.serving_size_g,
+              _originalCalories: base.calories
+            });
+          }
+          
+          // Create the nutrition data object
+          nutritionData = {
+            name: item,
+            aliases: [],
+            category: nutritionixResult.standardName || '',
+            servings: servingsArray
+          };
+          
+          console.log(`[NutritionPipeline] Created ${servingsArray.length} plate section servings for "${item}"`);
+          
+          // Skip the rest of the portion processing since we've already created the servings
+          continue;
         }
-        if (portionSizes) {
+        
+        /* The code below is no longer used since we're using plate sections directly,
+           but we'll keep it for backward compatibility if needed */
+        if (false && portionSizes) {
           // Convert Indian household measurements to grams for consistent scaling
           const convertToGrams = (value, unit, isLiquid = false) => {
             if (value === undefined || unit === undefined) {
@@ -346,7 +359,48 @@ async function processAndStoreNutrition(foodItems = []) {
       }
 
       // Use our improved portion scaling for Nutritionix results
-      if (nutritionData && nutritionData.servings && nutritionData.servings.length > 0) {
+      // --- CUSTOM COLLEGE PLATE SECTION LOGIC FOR NON-PIECE FOODS ---
+      if (nutritionixResult && base && !isPieceBasedFood) {
+        // Always use the four plate sections for non-piece foods
+        const plateSections = {
+          side: { weight_g: 125, volume_ml: 130 },
+          center: { weight_g: 165, volume_ml: 170 },
+          narrow: { weight_g: 135, volume_ml: 140 },
+          main: { weight_g: 375, volume_ml: 380 }
+        };
+        const isLiquid = isLiquidFood(item);
+        const servingsArray = [];
+        for (const [sectionName, measurements] of Object.entries(plateSections)) {
+          const weight_g = measurements.weight_g;
+          const volume_ml = isLiquid ? measurements.volume_ml : null;
+          const sectionLabel = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+          const portionLabel = isLiquid ? 
+            `${sectionLabel} Section (~${volume_ml}ml)` : 
+            `${sectionLabel} Section (~${weight_g}g)`;
+          servingsArray.push({
+            size: sectionName,
+            portion_label: portionLabel,
+            weight_g: weight_g,
+            volume_ml: volume_ml,
+            calories: Math.round(base.calories * weight_g / base.serving_size_g),
+            protein: Math.round(base.protein_g * weight_g / base.serving_size_g * 10) / 10,
+            carbs: Math.round(base.carbohydrates_total_g * weight_g / base.serving_size_g * 10) / 10,
+            fat: Math.round(base.fat_total_g * weight_g / base.serving_size_g * 10) / 10,
+            fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * weight_g / base.serving_size_g * 10) / 10 : undefined,
+            sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * weight_g / base.serving_size_g * 10) / 10 : undefined,
+            _source: 'nutritionix',
+            _originalServingSize: base.serving_size_g,
+            _originalCalories: base.calories
+          });
+        }
+        nutritionData = {
+          name: item,
+          aliases: [],
+          category: nutritionixResult.standardName || '',
+          servings: servingsArray
+        };
+        console.log(`[NutritionPipeline] Forced plate section servings for "${item}" (Nutritionix):`, servingsArray.map(s => s.portion_label));
+      } else if (nutritionData && nutritionData.servings && nutritionData.servings.length > 0) {
         // Get the base serving from Nutritionix
         const baseServing = {
           ...nutritionData.servings[0],
@@ -399,16 +453,23 @@ async function processAndStoreNutrition(foodItems = []) {
       const savedDoc = await saveNutritionToDb(nutritionData);
       console.log(`[NutritionPipeline] Saved nutrition for "${item}" with ID: ${savedDoc._id}`);
       saved++;
+      
+    } catch (error) {
+      console.error(`[NutritionPipeline] Error processing "${item}": ${error.message}`);
+      errors.push(`Error processing "${item}": ${error.message}`);
+      skipped++;
     }
-    } catch (err) {
-      console.error(`[NutritionPipeline] Error processing "${item}": ${err.message}`);
-      errors.push({ item, error: err.message });
-    }
-  } // <-- closes the for-loop
-
-  console.log(`\n=== NUTRITION PIPELINE COMPLETED ===`);
-  console.log(`Saved: ${saved}, Skipped: ${skipped}, Errors: ${errors.length}`);
-
+  }
+  
+  // Log overall statistics
+  const totalProcessed = saved + skipped;
+  console.log(`=== NUTRITION PIPELINE FINISHED ===`);
+  console.log(`Total items: ${unique.length}`);
+  console.log(`Items from DB: ${processedItems.length}`);
+  console.log(`Items processed with APIs: ${itemsToProcess.length}`);
+  console.log(`Successfully saved: ${saved}`);
+  console.log(`Skipped/errors: ${skipped}`);
+  
   return { saved, skipped, errors };
 }
 

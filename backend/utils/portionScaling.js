@@ -54,70 +54,95 @@ export function generateScaledServings(baseServing = {}) {
   const createServing = (size, label, weight_g, volume_ml, diameter_cm, factor = 1) => {
     const s = clone(baseServing);
     s.size = size;
+    s.portion_label = label;
     
     // Get food name in lowercase for easier matching
     const foodName = (baseServing.name || '').toLowerCase();
     let actualWeight = weight_g;
     let actualVolume = volume_ml;
     
-    // Define portion sizes for different food types (in grams)
-    const portionSizes = {
-      // Breads
-      bread: { small: 30, medium: 60, large: 90 },
-      // Fruits (like apple)
-      apple: { small: 100, medium: 150, large: 200 },
-      // Rice and dals
-      rice: { small: 100, medium: 150, large: 200 },
-      dal: { small: 100, medium: 150, large: 200 },
-      // Curries and main dishes
-      curry: { small: 150, medium: 200, large: 300 },
-      // Default for other items
-      default: { small: 100, medium: 200, large: 300 }
+    // Define plate section measurements based on the reference image
+    const plateSections = {
+      side: { weight_g: 125, volume_ml: 130 },
+      center: { weight_g: 165, volume_ml: 170 },
+      narrow: { weight_g: 135, volume_ml: 140 },
+      main: { weight_g: 375, volume_ml: 380 },
+      // For bread-like items
+      bread: { small: 30, medium: 60, large: 90 }
     };
     
-    // Determine food type
-    let foodType = 'default';
-    if (foodName.includes('bread') || foodName.includes('toast') || foodName.includes('roti')) {
-      foodType = 'bread';
-    } else if (foodName.includes('apple') || foodName.includes('fruit')) {
-      foodType = 'apple';
-    } else if (foodName.includes('rice')) {
-      foodType = 'rice';
-    } else if (foodName.includes('dal') || foodName.includes('lentil') || foodName.includes('curry')) {
-      foodType = foodName.includes('dal') ? 'dal' : 'curry';
-    }
+    // Determine if this is a piece-based food, beverage, or standard portion
+    const isPieceBased = 
+      foodName.includes('bread') || foodName.includes('toast') || foodName.includes('roti') || 
+      foodName.includes('naan') || foodName.includes('paratha') || foodName.includes('poori') ||
+      foodName.includes('sweet') || foodName.includes('dessert') || foodName.includes('cookie') ||
+      foodName.includes('biscuit') || foodName.includes('cake') || foodName.includes('sandwich');
+      
+    const isBeverage = 
+      foodName.includes('juice') || foodName.includes('tea') || foodName.includes('coffee') || 
+      foodName.includes('water') || foodName.includes('milk') || foodName.includes('drink') ||
+      foodName.includes('beverage') || foodName.includes('shake');
     
-    // Get appropriate portion size
-    const sizes = portionSizes[foodType] || portionSizes.default;
-    actualWeight = sizes[size] || sizes.medium; // Default to medium if size not found
+    // Normalize the size for more flexible matching
+    const normalizedSize = size.toLowerCase();
     
-    // Update portion label
-    if (foodType === 'bread') {
-      s.portion_label = `1 ${size === 'medium' ? '' : size + ' '}Slice (${actualWeight}g)`;
-    } else if (foodType === 'apple') {
-      s.portion_label = `1 ${size} ${foodName} (${actualWeight}g)`;
-    } else if (foodType === 'rice' || foodType === 'dal') {
-      s.portion_label = `1 ${size === 'medium' ? '' : size + ' '}Katori (${actualWeight}g)`;
-    } else if (foodType === 'curry') {
-      s.portion_label = `1 ${size === 'medium' ? '' : size + ' '}Bowl (${actualWeight}g)`;
+    // Set appropriate measurements based on food type and size
+    if (isPieceBased) {
+      // For piece-based foods like bread, use the piece weight
+      let sizeCategory = 'medium';
+      if (normalizedSize.includes('small')) sizeCategory = 'small';
+      if (normalizedSize.includes('large')) sizeCategory = 'large';
+      
+      const breadSizes = plateSections.bread;
+      actualWeight = breadSizes[sizeCategory] || breadSizes.medium;
+      
+      // Keep original portion label if present, otherwise create standard one
+      if (!s.portion_label) {
+        s.portion_label = `1 ${sizeCategory === 'medium' ? '' : sizeCategory + ' '}Piece (${actualWeight}g)`;
+      }
+    } else if (isBeverage) {
+      // For beverages, focus on volume
+      let volumeCategory = 'medium';
+      if (normalizedSize.includes('small')) volumeCategory = 'small';
+      if (normalizedSize.includes('large')) volumeCategory = 'large';
+      
+      // Assign standard volumes based on size
+      actualVolume = volumeCategory === 'small' ? 100 : volumeCategory === 'large' ? 300 : 200;
+      
+      // Keep original portion label if present
+      if (!s.portion_label) {
+        s.portion_label = `1 ${volumeCategory === 'medium' ? '' : volumeCategory + ' '}Glass (${actualVolume}ml)`;
+      }
+    } else if (['side', 'center', 'narrow', 'main'].includes(normalizedSize)) {
+      // Handle section-based foods with standard sizes
+      const section = plateSections[normalizedSize];
+      if (section) {
+        actualWeight = section.weight_g;
+        actualVolume = section.volume_ml;
+      }
     } else {
-      s.portion_label = label; // Keep original label if no specific type matched
+      // Default handling for any other size format
+      // Try to map to standard sizes
+      let mappedSize = 'medium';
+      if (normalizedSize.includes('small')) mappedSize = 'small';
+      if (normalizedSize.includes('large')) mappedSize = 'large';
+      
+      // Use default medium size if we can't map it
+      const defaultSection = plateSections[mappedSize] || plateSections.medium;
+      if (defaultSection) {
+        actualWeight = defaultSection.weight_g;
+        actualVolume = defaultSection.volume_ml;
+      }
     }
     
-    // Log adjustments for debugging
-    if (weight_g !== actualWeight) {
-      console.warn(`Adjusted portion size for ${foodName} (${size}): ${weight_g}g → ${actualWeight}g`);
-    }
-    
-    // Set the appropriate measurement based on food type
-    if (weight_g !== null) s.weight_g = actualWeight;
-    if (volume_ml !== null) s.volume_ml = actualVolume || volume_ml;
+    // Set the appropriate measurement fields
+    if (actualWeight !== null) s.weight_g = actualWeight;
+    if (actualVolume !== null) s.volume_ml = actualVolume;
     if (diameter_cm !== null) s.diameter_cm = diameter_cm;
     
-    // Apply the scaling factor to nutrition values
-    // For Nutritionix data, we need to use density-based scaling to preserve nutritional values
+    // Apply nutrition scaling
     if (baseServing._source === 'nutritionix') {
-      // Calculate original density (nutrition per gram)
+      // For Nutritionix data, use density-based scaling
       const origWeight = baseServing.weight_g || 100;
       const caloriesDensity = (baseServing.calories || 0) / origWeight;
       const proteinDensity = (baseServing.protein || 0) / origWeight;
@@ -136,12 +161,12 @@ export function generateScaledServings(baseServing = {}) {
       if (baseServing.fiber) s.fiber = Math.round(fiberDensity * actualWeight * 10) / 10;
       if (baseServing.sugar) s.sugar = Math.round(sugarDensity * actualWeight * 10) / 10;
       
-      console.log(`Nutritionix density-based scaling: ${origWeight}g → ${actualWeight}g`);
-      console.log(`Calories: ${caloriesDensity.toFixed(2)} cal/g × ${actualWeight}g = ${s.calories} cal`);
+      console.log(`Nutritionix scaling: ${origWeight}g → ${actualWeight}g`);
     } else {
-      // For non-Nutritionix data, use the original scaling method
+      // For non-Nutritionix data, use the scaling factor method
       scaleNutrition(s, factor);
     }
+    
     return s;
   };
 
@@ -193,11 +218,12 @@ export function generateScaledServings(baseServing = {}) {
     // Normalize base volume
     baseVol = normalizeInput(baseVol, 200, 500); // Cap at 500ml
     
-    // Create standard liquid servings
+    // Create liquid servings using the four standard plate sections
     servings.push(
-      createServing('small', '1 Small Glass (100ml)', null, 100, null, 100/baseVol),
-      createServing('medium', '1 Glass (200ml)', null, 200, null, 200/baseVol),
-      createServing('large', '1 Large Glass (300ml)', null, 300, null, 300/baseVol)
+      createServing('side', 'Side Section (~130ml / ~125g)', null, 130, null, 130/baseVol),
+      createServing('center', 'Center Section (~170ml / ~165g)', null, 170, null, 170/baseVol),
+      createServing('narrow', 'Narrow Section (~140ml / ~135g)', null, 140, null, 140/baseVol),
+      createServing('main', 'Main Section (~380ml / ~375g)', null, 380, null, 380/baseVol)
     );
     return servings;
   }
@@ -206,15 +232,20 @@ export function generateScaledServings(baseServing = {}) {
   if (baseServing.weight_g) {
     const baseW = normalizeInput(baseServing.weight_g, 100, 500); // Cap at 500g
     servings.push(
-      createServing('small', '1 Small Katori (100g)', 100, null, null, 100/baseW),
-      createServing('medium', '1 Katori (200g)', 200, null, null, 200/baseW),
-      createServing('large', '1 Large Katori (300g)', 300, null, null, 300/baseW)
+      createServing('side', 'Side Section (~130ml / ~125g)', null, 130, null, 130/baseW),
+      createServing('center', 'Center Section (~170ml / ~165g)', null, 170, null, 170/baseW),
+      createServing('narrow', 'Narrow Section (~140ml / ~135g)', null, 140, null, 140/baseW),
+      createServing('main', 'Main Section (~380ml / ~375g)', null, 380, null, 380/baseW)
     );
     return servings;
   }
 
   // 4. For items with no specific measurement (like fruits, eggs)
   servings.push(
+    createServing('side', 'Side Section (~130ml / ~125g)', null, 130, null, 1),
+    createServing('center', 'Center Section (~170ml / ~165g)', null, 170, null, 1),
+    createServing('narrow', 'Narrow Section (~140ml / ~135g)', null, 140, null, 1),
+    createServing('main', 'Main Section (~380ml / ~375g)', null, 380, null, 1),
     createServing('small', '1 Small Piece', 50, null, null, 1),
     createServing('medium', '1 Piece', 100, null, null, 1),
     createServing('large', '1 Large Piece', 150, null, null, 1.5)

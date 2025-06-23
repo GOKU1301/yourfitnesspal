@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaUtensils, FaUtensilSpoon, FaUser, FaPlus, FaMinus, FaSpinner, FaCalculator, FaHome } from 'react-icons/fa';
+import { FaUtensils, FaUtensilSpoon, FaUser, FaPlus, FaMinus, FaSpinner, FaCalculator, FaHome, FaInfoCircle } from 'react-icons/fa';
 import { MdRestaurant } from 'react-icons/md';
 import { Link } from 'react-router-dom';
 
@@ -21,7 +21,33 @@ const NutritionPage = () => {
   const [totalNutrition, setTotalNutrition] = useState(null);
   const [showTotalNutrition, setShowTotalNutrition] = useState(false);
   const [selectedServingSizes, setSelectedServingSizes] = useState({});
-  
+  const [showPlateSectionModal, setShowPlateSectionModal] = useState(false);
+
+  // Determine if a food item uses piece-based or plate section-based servings
+  const isPieceBased = (item) => {
+    if (!item?.servings || !item.servings[0]?.portion_label) return false;
+    const portionLabel = item.servings[0].portion_label.toLowerCase();
+    return portionLabel.includes('piece') || portionLabel.includes('slice') || 
+           portionLabel.includes('roti') || portionLabel.includes('chapati') ||
+           portionLabel.includes('paratha') || portionLabel.includes('naan') ||
+           portionLabel.includes('poori') || portionLabel.includes('sweet');
+  };
+
+  // Function to get size options label
+  const getSizeLabel = (size, item) => {
+    if (!item?.servings) return size;
+    const serving = item.servings.find(s => s.size === size);
+    return serving?.portion_label || size;
+  };
+
+  // Function to get available serving size options from backend data
+  const getServingSizeOptions = (item) => {
+    if (!item?.servings || !Array.isArray(item.servings)) return [];
+    // Return only the sizes that exist in the backend response
+    return item.servings.map(serving => serving.size);
+  };
+
+
   // Fetch nutrition data for food items
   const fetchNutritionData = async (items) => {
     if (!items || items.length === 0) return;
@@ -164,6 +190,9 @@ const NutritionPage = () => {
     if (showTotalNutrition) {
       setShowTotalNutrition(false);
     }
+    
+    // Force a re-render to update nutrition values
+    setNutritionData(prevData => ({ ...prevData }));
   };
   
   // Handle serving size selection
@@ -177,6 +206,9 @@ const NutritionPage = () => {
     if (showTotalNutrition) {
       setShowTotalNutrition(false);
     }
+    
+    // Force a re-render to update nutrition values
+    setNutritionData(prevData => ({ ...prevData }));
   };
   
   // Calculate total nutrition based on selected quantities and serving sizes
@@ -194,11 +226,9 @@ const NutritionPage = () => {
       if (quantity > 0 && nutritionData[item]) {
         const itemNutrition = nutritionData[item];
         
-        // Get the selected serving size (or default to medium/small if not selected)
-        const selectedSize = selectedServingSizes[item] || 'medium';
-        const serving = itemNutrition.servings.find(s => s.size === selectedSize) || 
-                       itemNutrition.servings.find(s => s.size === 'medium') || 
-                       itemNutrition.servings.find(s => s.size === 'small');
+        // Get the selected serving size (or default to medium/center if not selected)
+        const selectedSize = selectedServingSizes[item] || (isPieceBased(itemNutrition) ? 'medium' : 'center');
+        const serving = itemNutrition.servings?.find(s => s.size === selectedSize);
         
         if (serving) {
           totals.calories += (serving.calories || 0) * quantity;
@@ -280,6 +310,164 @@ const NutritionPage = () => {
     <div className="nutrition-page modern-nutrition">
       {/* No custom header here; rely on global app-header */}
 
+      {/* Plate Section Reference Modal */}
+      {showPlateSectionModal && (
+        <div className="plate-modal-overlay" onClick={() => setShowPlateSectionModal(false)} style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div className="plate-modal-content" onClick={e => e.stopPropagation()} style={{
+            position: 'relative',
+            background: '#222',
+            padding: '24px 24px 16px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 24px rgba(0,0,0,0.25)',
+            maxWidth: '90%',
+            maxHeight: '90%'
+          }}>
+            <h3 style={{ color: 'white', textAlign: 'center', marginTop: 0, marginBottom: '12px' }}>College Plate Section Reference</h3>
+            
+            <div style={{ position: 'relative', width: 'auto', maxWidth: '500px', margin: '0 auto' }}>
+              <img 
+                src="/images/plateimage.png" 
+                alt="College Plate Sections" 
+                style={{ width: '100%', display: 'block', margin: '0 auto' }} 
+              />
+              
+              {/* Main Section (Bottom Middle) */}
+              <div style={{
+                position: 'absolute', left: '34%', top: '62%',
+                background: 'rgba(0,0,0,0.8)', 
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '6px', 
+                fontWeight: 'bold', 
+                pointerEvents: 'none',
+                fontSize: '1.1rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                border: '2px solid #fff',
+                textAlign: 'center',
+                minWidth: '140px'
+              }}>
+                Main Section<br/>(~380ml / ~375g)
+              </div>
+              
+              {/* Center Section (Top Middle) */}
+              <div style={{
+                position: 'absolute', left: '38%', top: '25%',
+                background: 'rgba(0,0,0,0.8)', 
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '6px', 
+                fontWeight: 'bold', 
+                pointerEvents: 'none',
+                fontSize: '1.1rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                border: '2px solid #fff',
+                textAlign: 'center',
+                minWidth: '140px'
+              }}>
+                Center Section<br/>(~170ml / ~165g)
+              </div>
+              
+              {/* Side Section (Top Left) */}
+              <div style={{
+                position: 'absolute', left: '7%', top: '13%',
+                background: 'rgba(0,0,0,0.8)', 
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '6px', 
+                fontWeight: 'bold', 
+                pointerEvents: 'none',
+                fontSize: '1.1rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                border: '2px solid #fff',
+                textAlign: 'center',
+                minWidth: '130px'
+              }}>
+                Side Section<br/>(~130ml / ~125g)
+              </div>
+              
+              {/* Side Section (Top Right) */}
+              <div style={{
+                position: 'absolute', left: '69%', top: '13%',
+                background: 'rgba(0,0,0,0.8)', 
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '6px', 
+                fontWeight: 'bold', 
+                pointerEvents: 'none',
+                fontSize: '1.1rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                border: '2px solid #fff',
+                textAlign: 'center',
+                minWidth: '130px'
+              }}>
+                Side Section<br/>(~130ml / ~125g)
+              </div>
+              
+              {/* Narrow Section (Bottom Left) */}
+              <div style={{
+                position: 'absolute', left: '5%', top: '60%',
+                background: 'rgba(0,0,0,0.8)', 
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '6px', 
+                fontWeight: 'bold', 
+                pointerEvents: 'none',
+                fontSize: '1.1rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                border: '2px solid #fff',
+                textAlign: 'center',
+                minWidth: '130px'
+              }}>
+                Narrow Section<br/>(~140ml / ~135g)
+              </div>
+              
+              {/* Narrow Section (Bottom Right) */}
+              <div style={{
+                position: 'absolute', left: '69%', top: '60%',
+                background: 'rgba(0,0,0,0.8)', 
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '6px', 
+                fontWeight: 'bold', 
+                pointerEvents: 'none',
+                fontSize: '1.1rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                border: '2px solid #fff',
+                textAlign: 'center',
+                minWidth: '130px'
+              }}>
+                Narrow Section<br/>(~140ml / ~135g)
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowPlateSectionModal(false)}
+              style={{
+                display: 'block',
+                margin: '20px auto 0 auto',
+                padding: '8px 20px',
+                background: '#d9534f',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button 
@@ -316,6 +504,28 @@ const NutritionPage = () => {
           )}
         </div>
       </div>
+      
+      {/* Plate Section Reference Button */}
+      <button
+        onClick={() => setShowPlateSectionModal(true)}
+        style={{
+          margin: "12px auto 16px auto",
+          padding: "10px 18px",
+          fontWeight: "bold",
+          background: "#6c5ce7",
+          color: "white",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "6px",
+          width: "fit-content"
+        }}
+      >
+        <FaInfoCircle /> View Plate Section Reference
+      </button>
       
       <div className="meal-container">
         {loading ? (
@@ -355,18 +565,18 @@ const NutritionPage = () => {
                         const itemNutrition = nutritionData[item];
                         const quantity = quantities[item] || 0;
                         
-                        // Get the selected serving size (or default to medium/small if not selected)
-                        const selectedSize = selectedServingSizes[item] || 'medium';
-                        const serving = itemNutrition?.servings?.find(s => s.size === selectedSize) || 
-                                       itemNutrition?.servings?.find(s => s.size === 'medium') || 
-                                       itemNutrition?.servings?.find(s => s.size === 'small');
+                        // Get the selected serving size (or default to medium/center if not selected)
+                        const selectedSize = selectedServingSizes[item] || (isPieceBased(itemNutrition) ? 'medium' : 'center');
+                        const serving = itemNutrition?.servings?.find(s => s.size === selectedSize);
                         
                         // Calculate nutrition based on quantity and selected serving size
                         const calculatedNutrition = {
                           calories: serving ? Math.round((serving.calories || 0) * quantity * 10) / 10 : 0,
                           protein: serving ? Math.round((serving.protein || 0) * quantity * 10) / 10 : 0,
                           carbs: serving ? Math.round((serving.carbs || 0) * quantity * 10) / 10 : 0,
-                          fat: serving ? Math.round((serving.fat || 0) * quantity * 10) / 10 : 0
+                          fat: serving ? Math.round((serving.fat || 0) * quantity * 10) / 10 : 0,
+                          fiber: serving && serving.fiber ? Math.round((serving.fiber || 0) * quantity * 10) / 10 : 0,
+                          sugar: serving && serving.sugar ? Math.round((serving.sugar || 0) * quantity * 10) / 10 : 0
                         };
                         
                         return (
@@ -383,6 +593,8 @@ const NutritionPage = () => {
                                   <div><span className="macro-label">Protein:</span> <span className="macro-value">{calculatedNutrition.protein}g</span></div>
                                   <div><span className="macro-label">Carbs:</span> <span className="macro-value">{calculatedNutrition.carbs}g</span></div>
                                   <div><span className="macro-label">Fat:</span> <span className="macro-value">{calculatedNutrition.fat}g</span></div>
+                                  {calculatedNutrition.fiber > 0 && <div><span className="macro-label">Fiber:</span> <span className="macro-value">{calculatedNutrition.fiber}g</span></div>}
+                                  {calculatedNutrition.sugar > 0 && <div><span className="macro-label">Sugar:</span> <span className="macro-value">{calculatedNutrition.sugar}g</span></div>}
                                   {serving && <div style={{fontSize: '0.8em', marginTop: '4px', color: '#888'}}>
                                     ({serving.portion_label || serving.size})
                                   </div>}
@@ -394,21 +606,15 @@ const NutritionPage = () => {
                                         <MdRestaurant /> Serving Size:
                                       </div>
                                       <div style={{display: 'flex', gap: '5px', flexWrap: 'wrap'}}>
-                                        {['small', 'medium', 'large'].map(size => {
-                                          // Check if this size exists in the servings data
-                                          const sizeExists = itemNutrition.servings.some(s => s.size === size);
-                                          if (!sizeExists) return null;
-                                          
-                                          return (
-                                            <button 
-                                              key={size}
-                                              onClick={() => handleServingSizeChange(item, size)}
-                                              className={`serving-size-btn${selectedServingSizes[item] === size ? ' active' : ''}`}
-                                            >
-                                              {size.charAt(0).toUpperCase() + size.slice(1)}
-                                            </button>
-                                          );
-                                        })}
+                                        {getServingSizeOptions(itemNutrition).map(size => (
+                                          <button 
+                                            key={size}
+                                            onClick={() => handleServingSizeChange(item, size)}
+                                            className={`serving-size-btn${selectedServingSizes[item] === size ? ' active' : ''}`}
+                                          >
+                                            {getSizeLabel(size, itemNutrition)}
+                                          </button>
+                                        ))}
                                       </div>
                                     </div>
                                   )}

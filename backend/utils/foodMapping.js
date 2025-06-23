@@ -146,28 +146,47 @@ async function addFoodMapping(localName, standardName) {
     const localMappings = loadLocalMappings();
     localMappings[localName.toLowerCase()] = standardName.toLowerCase();
     saveLocalMappings(localMappings);
-    
+    let pineconeAdded = false;
+    let pineconeError = null;
     // Then update Pinecone if available
-    if (pineconeIndex) {
-      const embedding = await generateEmbedding(localName);
-      
-      await pineconeIndex.upsert({
-        vectors: [{
-          id: localName.toLowerCase().replace(/\s+/g, '-'),
-          values: embedding,
-          metadata: {
-            originalName: localName.toLowerCase(),
-            standardName: standardName.toLowerCase()
-          }
-        }]
-      });
-      
-      console.log(`Added mapping: ${localName} → ${standardName}`);
+    if (!pineconeIndex) {
+      console.error('[addFoodMapping] Pinecone index is not initialized! Cannot upsert.');
+    } else {
+      try {
+        const embedding = await generateEmbedding(localName);
+        if (!Array.isArray(embedding) || embedding.length === 0) {
+          throw new Error(`Embedding for '${localName}' is not a valid non-empty array: ` + JSON.stringify(embedding));
+        }
+        const upsertPayload = {
+          vectors: [{
+            id: localName.toLowerCase().replace(/\s+/g, '-'),
+            values: embedding,
+            metadata: {
+              originalName: localName.toLowerCase(),
+              standardName: standardName.toLowerCase()
+            }
+          }]
+        };
+        console.log('[addFoodMapping] Pinecone upsert payload:', JSON.stringify(upsertPayload, null, 2));
+        console.log('[addFoodMapping] Pinecone index object:', pineconeIndex);
+        await pineconeIndex.upsert({
+          vectors: upsertPayload.vectors
+        });
+        
+        pineconeAdded = true;
+        console.log(`Added mapping: ${localName} → ${standardName}`);
+      } catch (pineconeErr) {
+        pineconeError = pineconeErr;
+        console.error(`Error adding food mapping to Pinecone for ${localName}:`, pineconeErr);
+      }
     }
+    return { added: true, pineconeAdded, pineconeError };
   } catch (error) {
     console.error(`Error adding food mapping for ${localName}:`, error);
+    return { added: false, error };
   }
 }
+
 
 /**
  * Calculate string similarity between two strings using Levenshtein distance
