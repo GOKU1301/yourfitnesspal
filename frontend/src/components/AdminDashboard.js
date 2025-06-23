@@ -176,7 +176,8 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please log in again.');
       }
       
-      const response = await axios.post('http://localhost:5000/api/upload', formData, {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await axios.post(`${API_URL}/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'x-auth-token': token

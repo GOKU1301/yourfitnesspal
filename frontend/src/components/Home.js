@@ -18,7 +18,7 @@ const Home = () => {
         }}>
           <div style={{ background: '#222', padding: 24, borderRadius: 12, position: 'relative', boxShadow: '0 2px 18px rgba(0,0,0,0.7)' }}>
             <button onClick={() => setShowTimetable(false)} style={{ position: 'absolute', top: 10, right: 10, background: '#6366f1', color: 'white', border: 'none', borderRadius: 4, padding: '6px 12px', cursor: 'pointer', fontWeight: 600 }}>Close</button>
-            <img src={"http://localhost:5000/timetable-image"} alt="Mess Timetable" style={{ maxWidth: '80vw', maxHeight: '75vh', borderRadius: 8, boxShadow: '0 2px 18px rgba(0,0,0,0.3)' }} />
+            <img src={`${process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000'}/timetable-image`} alt="Mess Timetable" style={{ maxWidth: '80vw', maxHeight: '75vh', borderRadius: 8, boxShadow: '0 2px 18px rgba(0,0,0,0.3)' }} />
           </div>
         </div>
       )}

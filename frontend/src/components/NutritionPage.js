@@ -56,7 +56,8 @@ const NutritionPage = () => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const queryString = items.join(',');
-      const response = await fetch(`${apiUrl}/api/nutrition?items=${encodeURIComponent(queryString)}`, {
+      // Remove duplicate /api in URL path construction
+      const response = await fetch(`${apiUrl}/nutrition?items=${encodeURIComponent(queryString)}`, {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -126,7 +127,7 @@ const NutritionPage = () => {
     try {
       setLoading(true);
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const apiEndpoint = `${apiUrl}/api/meals/current`;
+      const apiEndpoint = `${apiUrl}/meals/current`;
       
       console.log('[1/5] Preparing to fetch from:', apiEndpoint);
       
