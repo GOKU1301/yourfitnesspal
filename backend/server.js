@@ -79,13 +79,37 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: [
-    'https://yourfitnesspal.vercel.app',
-    'https://yourfitnesspal-frontend.vercel.app',
-    'https://yourfitnesspal-git-branch2-goku1301s-projects.vercel.app',
-    'http://localhost:3000'
-  ],
-  credentials: true
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'https://yourfitnesspal.vercel.app',
+      'https://yourfitnesspal-frontend.vercel.app',
+      'https://yourfitnesspal-git-branch2-goku1301s-projects.vercel.app',
+      'http://localhost:3000',
+      'https://localhost:3000'
+    ];
+    
+    // Log the request origin for debugging
+    console.log(`CORS request from origin: ${origin}`);
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, origin);
+    } else {
+      // For development purposes, you might want to allow all origins
+      // Remove this in production if you want strict origin checking
+      console.log(`Origin ${origin} not in allowed list, but allowing for development`);
+      callback(null, origin);
+      
+      // Uncomment below and remove the line above to enforce strict CORS in production
+      // console.log(`Origin ${origin} not allowed by CORS`);
+      // callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token']
 }));
 app.use(express.json());
 app.use(express.static('public'));
