@@ -888,7 +888,7 @@ app.use((err, req, res, next) => {
   res.status(500).send({ error: err.message || 'Server error' });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
 async function startServer() {
   try {
@@ -908,7 +908,7 @@ async function startServer() {
     const server = app.listen(PORT, () => {
       console.log(`\n🚀 Server running on port ${PORT}`);
       console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`   API URL: http://localhost:${PORT}/api`);
+      console.log(`   API URL: ${process.env.NODE_ENV === 'production' ? 'https://yourfitnesspal-production.up.railway.app/api' : `http://localhost:${PORT}/api`}`);
     });
     
     // Handle server errors
