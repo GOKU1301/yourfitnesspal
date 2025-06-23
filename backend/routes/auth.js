@@ -8,11 +8,37 @@ import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Enable CORS for all routes
+// Enable CORS for all auth routes
 const allowCors = (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  const allowedOrigins = [
+    'https://yourfitnesspal.vercel.app',
+    'https://yourfitnesspal-frontend.vercel.app',
+    'https://yourfitnesspal-git-branch2-goku1301s-projects.vercel.app',
+    'http://localhost:3000',
+    'https://localhost:3000'
+  ];
+  
+  const origin = req.headers.origin;
+  
+  // Log the request origin for debugging
+  console.log(`Auth route CORS request from origin: ${origin}`);
+  
+  // Allow requests with no origin (like mobile apps or curl requests)
+  if (!origin) {
+    next();
+    return;
+  }
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // For development purposes, allow all origins
+    res.header('Access-Control-Allow-Origin', origin);
+    console.log(`Origin ${origin} not in allowed list, but allowing for development`);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-auth-token');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   // Handle preflight
