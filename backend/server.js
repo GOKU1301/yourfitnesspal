@@ -118,17 +118,45 @@ const imagesPath = path.join(__dirname, 'images');
 console.log('Images directory path:', imagesPath); // Debug path resolution
 app.use('/images', express.static(imagesPath));
 
-// Direct route to serve timetable image (for debugging)
+// Route to serve timetable image
 app.get('/timetable-image', (req, res) => {
-  const imagePath = path.join(__dirname, 'images', 'currenttimetable.jpeg');
-  console.log('Trying to serve image from:', imagePath);
-  fs.access(imagePath, fs.constants.F_OK, (err) => {
-    if (err) {
-      console.error('Image file not accessible:', err);
-      return res.status(404).send('Image not found');
+  // Try different possible image filenames
+  const possibleFiles = [
+    path.join(__dirname, 'images', 'currenttimetable.jpeg'),
+    path.join(__dirname, 'images', 'currenttimetable.jpg'),
+    path.join(__dirname, 'images', 'timetable.jpeg'),
+    path.join(__dirname, 'images', 'timetable.jpg')
+  ];
+  
+  console.log('Available files in images directory:');
+  try {
+    const files = fs.readdirSync(path.join(__dirname, 'images'));
+    console.log(files);
+  } catch (error) {
+    console.error('Error reading images directory:', error);
+  }
+  
+  // Try each possible file until one is found
+  const tryNextFile = (index) => {
+    if (index >= possibleFiles.length) {
+      console.error('No timetable image found in any of the expected locations');
+      return res.status(404).send('Timetable image not found');
     }
-    res.sendFile(imagePath);
-  });
+    
+    const imagePath = possibleFiles[index];
+    console.log(`Trying to serve image from: ${imagePath}`);
+    
+    fs.access(imagePath, fs.constants.F_OK, (err) => {
+      if (err) {
+        console.log(`File not found at ${imagePath}:`, err.message);
+        return tryNextFile(index + 1);
+      }
+      console.log(`Found timetable image at: ${imagePath}`);
+      res.sendFile(imagePath);
+    });
+  };
+  
+  tryNextFile(0);
 });
 
 // Log all requests for debugging
