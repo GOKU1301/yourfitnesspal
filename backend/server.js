@@ -79,7 +79,12 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['https://yourfitnesspal.vercel.app', 'https://yourfitnesspal-frontend.vercel.app', 'http://localhost:3000'],
+  origin: [
+    'https://yourfitnesspal.vercel.app',
+    'https://yourfitnesspal-frontend.vercel.app',
+    'https://yourfitnesspal-git-branch2-goku1301s-projects.vercel.app',
+    'http://localhost:3000'
+  ],
   credentials: true
 }));
 app.use(express.json());
