@@ -8,23 +8,8 @@ import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Enable CORS for all routes
-const allowCors = (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-auth-token');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-};
-
-// Apply CORS middleware
-router.use(allowCors);
+// CORS is now handled at the application level in server.js
+// No need for route-specific CORS handling
 
 /**
  * @route   POST api/auth/register

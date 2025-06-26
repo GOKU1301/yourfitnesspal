@@ -83,15 +83,24 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps, curl, Postman)
     if(!origin) return callback(null, true);
     
-    // Define allowed origins
+    // Define allowed origins with exact matching
     const allowedOrigins = [
       'http://localhost:3000',              // Local development
       'https://yourfitnesspal.vercel.app',  // Production frontend
       'https://yourfitnesspal-git-branch3-goku1301s-projects.vercel.app', // Branch3 frontend
-      process.env.FRONTEND_URL || ''        // Environment-specific frontend URL
-    ].filter(Boolean); // Remove empty strings
+    ];
     
-    if(allowedOrigins.indexOf(origin) !== -1 || !origin) {
+    // Add environment-specific frontend URL if set
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    
+    // For debugging
+    console.log('Request origin:', origin);
+    console.log('Allowed origins:', allowedOrigins);
+    
+    if(allowedOrigins.includes(origin) || !origin) {
+      // Set the specific origin as allowed rather than '*'
       callback(null, true);
     } else {
       console.log('CORS blocked request from:', origin);

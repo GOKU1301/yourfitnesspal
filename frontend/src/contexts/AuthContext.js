@@ -76,9 +76,20 @@ export const AuthProvider = ({ children }) => {
   // Login user
   const login = async (email, password) => {
     try {
+      console.log('Login attempt to URL:', `${BASE_URL}/auth/login`);
+      console.log('Environment:', process.env.NODE_ENV);
+      console.log('API_URL:', API_URL);
+      console.log('BASE_URL:', BASE_URL);
+      
+      // Add CORS headers explicitly
       const res = await axios.post(`${BASE_URL}/auth/login`, { 
         email, 
         password 
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        withCredentials: false
       });
       
       if (!res.data.token) {
