@@ -3,6 +3,22 @@ import { FaUtensils, FaUtensilSpoon, FaUser, FaPlus, FaMinus, FaSpinner, FaCalcu
 import { MdRestaurant } from 'react-icons/md';
 import { Link } from 'react-router-dom';
 
+const PLATE_SECTIONS = [
+  // Top side sections
+  { label: "Side", value: "~105ml / ~100g", style: { top: "15%", left: "15%" } },
+  { label: "Side", value: "~105ml / ~100g", style: { top: "15%", right: "15%" } },
+  
+  // Middle narrow sections - moved down slightly
+  { label: "Narrow", value: "~115ml / ~110g", style: { top: "57%", left: "10%" } },
+  { label: "Narrow", value: "~115ml / ~110g", style: { top: "57%", right: "10%" } },
+  
+  // Center section - moved up more (from 50% to 45%)
+  { label: "Center", value: "~135ml / ~130g", style: { top: "30%", left: "50%", transform: 'translate(-50%, -50%)' } },
+  
+  // Main section - moved up slightly (from 5% to 7% from bottom)
+  { label: "Main", value: "~300ml / ~290g", style: { bottom: "20%", left: "50%", transform: 'translateX(-50%)' } },
+];
+
 const NutritionPage = () => {
   const [activeTab, setActiveTab] = useState('current');
   const [currentMeal, setCurrentMeal] = useState({
@@ -28,9 +44,12 @@ const NutritionPage = () => {
     
     setLoadingNutrition(true);
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Use environment variable with fallback
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Standardize the API_URL format
+      const apiUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
       const queryString = items.join(',');
-      const response = await fetch(`${apiUrl}/api/nutrition?items=${encodeURIComponent(queryString)}`, {
+      const response = await fetch(`${apiUrl}/nutrition?items=${encodeURIComponent(queryString)}`, {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -99,8 +118,11 @@ const NutritionPage = () => {
     // Original API call (kept for reference)
     try {
       setLoading(true);
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const apiEndpoint = `${apiUrl}/api/meals/current`;
+      // Use environment variable with fallback
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Standardize the API_URL format
+      const apiUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+      const apiEndpoint = `${apiUrl}/meals/current`;
       
       console.log('[1/5] Preparing to fetch from:', apiEndpoint);
       
@@ -280,6 +302,11 @@ const NutritionPage = () => {
     <div className="nutrition-page modern-nutrition">
       {/* No custom header here; rely on global app-header */}
 
+      {/* Add the plate reference button at the top */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+        <PlateSectionReference />
+      </div>
+      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button 
@@ -383,29 +410,29 @@ const NutritionPage = () => {
                                   <div><span className="macro-label">Protein:</span> <span className="macro-value">{calculatedNutrition.protein}g</span></div>
                                   <div><span className="macro-label">Carbs:</span> <span className="macro-value">{calculatedNutrition.carbs}g</span></div>
                                   <div><span className="macro-label">Fat:</span> <span className="macro-value">{calculatedNutrition.fat}g</span></div>
-                                  {serving && <div style={{fontSize: '0.8em', marginTop: '4px', color: '#888'}}>
-                                    ({serving.portion_label || serving.size})
-                                  </div>}
                                   
                                   {/* Serving size selection */}
-                                  {itemNutrition?.servings && itemNutrition.servings.length > 0 && (
+                                  {/* Always show serving size info */}
+                                <div className="serving-info" style={{marginTop: '4px', fontSize: '0.85em', color: '#666'}}>
+                                  <span style={{fontWeight: 'bold'}}>Serving:</span> {serving ? (serving.portion_label || (serving.size.charAt(0).toUpperCase() + serving.size.slice(1))) : 'Standard'}
+                                </div>
+
+                                {/* Serving size selector */}
+                                {itemNutrition?.servings && itemNutrition.servings.length > 0 && (
                                     <div className="serving-size-selector" style={{marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px'}}>
                                       <div style={{fontSize: '0.9em', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>
                                         <MdRestaurant /> Serving Size:
                                       </div>
                                       <div style={{display: 'flex', gap: '5px', flexWrap: 'wrap'}}>
-                                        {['small', 'medium', 'large'].map(size => {
-                                          // Check if this size exists in the servings data
-                                          const sizeExists = itemNutrition.servings.some(s => s.size === size);
-                                          if (!sizeExists) return null;
-                                          
+                                        {itemNutrition.servings.map(serv => {
                                           return (
                                             <button 
-                                              key={size}
-                                              onClick={() => handleServingSizeChange(item, size)}
-                                              className={`serving-size-btn${selectedServingSizes[item] === size ? ' active' : ''}`}
+                                              key={serv.size}
+                                              onClick={() => handleServingSizeChange(item, serv.size)}
+                                              className={`serving-size-btn${selectedServingSizes[item] === serv.size ? ' active' : ''}`}
+                                              title={serv.portion_label || ''}
                                             >
-                                              {size.charAt(0).toUpperCase() + size.slice(1)}
+                                              {serv.size.charAt(0).toUpperCase() + serv.size.slice(1)}
                                             </button>
                                           );
                                         })}
@@ -475,7 +502,8 @@ const NutritionPage = () => {
                         alignItems: 'center',
                         gap: '8px',
                         fontSize: '1rem',
-                        fontWeight: 'bold'
+                        fontWeight: 'bold',
+                        marginBottom: '24px'
                       }}
                     >
                       <FaCalculator /> Calculate Total Nutrition
@@ -596,5 +624,97 @@ const NutritionPage = () => {
     </div>
   );
 };
+
+// Plate Section Reference Button + Modal
+function PlateSectionReference() {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div style={{ textAlign: 'center', margin: '16px 0' }}>
+      <button
+        style={{
+          background: "#7C6AED",
+          color: "white",
+          border: "none",
+          borderRadius: "10px",
+          padding: "10px 20px",
+          fontWeight: "bold",
+          fontSize: "0.9rem",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          margin: "0 auto"
+        }}
+        onClick={() => setOpen(true)}
+      >
+        <span style={{ marginRight: 6 }}>ℹ️</span>
+        View Plate Section Reference
+      </button>
+      {open && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+          background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <div style={{
+            background: "#232323",
+            padding: 32,
+            borderRadius: 16,
+            boxShadow: "0 0 24px #000",
+            minWidth: 350,
+            maxWidth: 700,
+            textAlign: "center",
+            position: "relative"
+          }}>
+            <h2 style={{ color: "white", marginBottom: 20 }}>College Plate Section Reference</h2>
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <img
+                src={process.env.PUBLIC_URL + "/images/plateimage.png"}
+                alt="College Plate"
+                style={{ width: 500, maxWidth: "90vw", borderRadius: 10 }}
+              />
+              {PLATE_SECTIONS.map((section, i) => (
+                <div
+                  key={i}
+                  style={{
+                    position: "absolute",
+                    color: "white",
+                    background: "rgba(0,0,0,0.7)",
+                    border: "2px solid #fff",
+                    borderRadius: 8,
+                    padding: "4px 8px",
+                    fontWeight: "bold",
+                    fontSize: "0.85rem", // Reduced from 1.1rem
+                    pointerEvents: "none",
+                    textAlign: "center",
+                    maxWidth: "90px", // Control width for smaller spaces
+                    ...section.style
+                  }}
+                >
+                  {section.label}<br />
+                  <span style={{ fontWeight: "normal", fontSize: "0.75rem" }}>{section.value}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              style={{
+                marginTop: 24,
+                background: "#e74c3c",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                padding: "10px 32px",
+                fontWeight: "bold",
+                fontSize: "1.1rem",
+                cursor: "pointer"
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default NutritionPage;

@@ -1,6 +1,14 @@
 import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
 import axios from 'axios';
 
+// API URL with proper environment detection
+const API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://yourfitnesspal-production.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:5000');
+
+// Standardize the API_URL format to ensure it doesn't have a trailing '/api'
+const BASE_URL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -34,7 +42,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const res = await axios.get('http://localhost:5000/api/auth/me');
+      const res = await axios.get(`${BASE_URL}/auth/me`);
       const userData = {
         id: res.data.id || res.data._id,
         name: res.data.name,
@@ -68,7 +76,7 @@ export const AuthProvider = ({ children }) => {
   // Login user
   const login = async (email, password) => {
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', { 
+      const res = await axios.post(`${BASE_URL}/auth/login`, { 
         email, 
         password 
       });

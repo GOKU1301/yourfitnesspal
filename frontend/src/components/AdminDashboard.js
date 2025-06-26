@@ -176,13 +176,38 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please log in again.');
       }
       
-      const response = await axios.post('http://localhost:5000/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'x-auth-token': token
-        },
-        timeout: 300000 // 5 minutes timeout for large files
-      });
+      // Use environment-based API URL with fallback for REACT_APP_API_URL
+      // Use environment variable with fallback
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Standardize the API_URL format
+      const API_URL = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+      
+      console.log('Uploading timetable to:', `${API_URL}/upload`);
+      
+      // Try the new endpoint first
+      let response;
+      try {
+        response = await axios.post(`${API_URL}/timetable/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'x-auth-token': token
+          },
+          timeout: 300000 // 5 minutes timeout for large files
+        });
+        
+        console.log('Upload successful with new endpoint:', response.data);
+      } catch (uploadError) {
+        console.log('Error with new endpoint, trying legacy endpoint:', uploadError);
+        
+        // Fall back to the old endpoint if the new one fails
+        response = await axios.post(`${API_URL}/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'x-auth-token': token
+          },
+          timeout: 300000 // 5 minutes timeout for large files
+        });
+      }
 
       console.log('Upload successful:', response.data);
       

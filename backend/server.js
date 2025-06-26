@@ -87,6 +87,7 @@ app.use(cors({
     const allowedOrigins = [
       'http://localhost:3000',              // Local development
       'https://yourfitnesspal.vercel.app',  // Production frontend
+      'https://yourfitnesspal-git-branch3-goku1301s-projects.vercel.app', // Branch3 frontend
       process.env.FRONTEND_URL || ''        // Environment-specific frontend URL
     ].filter(Boolean); // Remove empty strings
     
