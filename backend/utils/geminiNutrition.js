@@ -31,175 +31,91 @@ class GeminiNutrition {
       // Prepare the prompt with strict formatting instructions
       const prompt = `Provide accurate nutrition information for: "${text}"
 
-Return ONLY a JSON object matching this structure (do not include any markdown):
-{
-  "name": "standard food name (English)",
-  "aliases": ["alias1", "alias2"],
-  "category": "bread | sabzi | dal | beverage | sweet | snack | dairy | etc.",
-  "servings": [
-    {
-      "size": "small | medium | large",
-      "portion_label": "Description with quantity and unit (e.g., '1 Small Roti (20cm)' or '1 Katori (200g)')",
-      "diameter_cm": number | null, // Only for breads like roti/chapati/paratha
-      "weight_g": number | null,     // For solids, sweets, snacks, etc.
-      "volume_ml": number | null,    // Only for beverages and liquids
-      "calories": number,
-      "protein": number,
-      "carbs": number,
-      "fat": number,
-      "fiber_g": number | null,
-      "sugar_g": number | null,
-      "sodium_mg": number | null
-    }
-  ]
-}
+      Return ONLY a JSON object matching this structure (do not include any markdown):
+      {
+        "name": "standard food name (English)",
+        "servings": [
+          {
+            "size": "side", // IMPORTANT: For non-piece foods, use ONLY "side", "center", "narrow", or "main"
+                            // For piece-based foods only, use "small", "medium", or "large"
+            "portion_label": "Portion description",
+            "diameter_cm": number | null,
+            "calories": number | null,
+            "protein": number | null,
+            "carbs": number | null,
+            "fat": number | null,
+            "fiber_g": number | null,
+            "sugar_g": number | null,
+            "volume_ml": number | null,
+            "weight_g": number | null,
+            // all these are sample values,but you must insert actual real nutrition values in place of these
+          },
+          // Include all appropriate servings
+        ],
+        "category": "Food Category"
+      }
+      
+      CRITICAL PORTION SIZE RULES - FOLLOW EXACTLY:
+      
+      1. First, determine if this is a piece-based food or a regular food:
+         - Piece-based foods: roti, chapati, paratha, naan, poori, bread, idli, vada, samosa, ladoo
+         - Beverages: milk, tea, coffee, juice, buttermilk, water
+         - Everything else: regular food (dal, sabzi, curry, rice, etc.)
 
-IMPORTANT PORTION SIZE RULES:
-1. For breads (roti, chapati, paratha, etc.):
-   - Small: 1 Small Roti (20cm, 30g)
-   - Medium: 1 Medium Roti (25cm, 50g)
-   - Large: 1 Large Roti (30cm, 70g)
-   - Set volume_ml and weight_g to null
-
-2. For rice, sabzi, dal, curries:
-   - Small: 1 Small Katori (100g)
-   - Medium: 1 Katori (200g)
-   - Large: 1 Large Katori (300g)
-   - Set diameter_cm and volume_ml to null
-
-3. For beverages (milk, lassi, juice, etc.):
-   - Small: 1 Small Glass (100ml)
-   - Medium: 1 Glass (200ml)
-   - Large: 1 Large Glass (300ml)
-   - Set diameter_cm and weight_g to null
-
-4. For snacks, sweets, and other items:
-   - Small: 1 Small Piece (50g)
-   - Medium: 1 Piece (100g)
-   - Large: 1 Large Piece (150g)
-   - Set diameter_cm and volume_ml to null
-
-PORTION LABEL FORMAT:
-- Always use '1' as the quantity in portion_label
-- Include size (Small/Medium/Large) and unit in the label
-- Examples:
-  - For breads: '1 Small Roti (20cm)'
-  - For rice/dal: '1 Small Katori (100g)'
-  - For drinks: '1 Small Glass (100ml)'
-  - For snacks: '1 Small Piece (50g)'
-
-GENERAL RULES:
-1. Always provide all three portion sizes (small, medium, large)
-2. Use consistent units and realistic weights/volumes as specified above
-3. Set all unused measurement fields to null (not 0)
-4. Use realistic nutritional values based on standard databases
-5. Return ONLY valid JSON, no explanation or markdown
-6. All numeric values must be numbers, not strings
-7. The output must exactly match the schema above`;
-
-      // Generate content with the prompt
+      2. For piece-based foods ONLY:
+         - Use piece-based sizes: "small", "medium", "large"
+         - Small: 1 Small Piece (30g)
+         - Medium: 1 Normal Piece (60g)
+         - Large: 1 Large Piece (90g)
+         - Set volume_ml to null for piece-based foods
+         
+      3. For beverages ONLY:
+         - Small Glass (100ml), Glass (200ml), Large Glass (300ml)
+         - Set weight_g to null for beverages
+         
+      4. For ALL OTHER FOODS, you MUST use ONLY these four plate sections:
+      
+         a. Side Section (~105ml / ~100g)
+            - size: "side"
+            - portion_label: "Side Section (~105ml / ~100g)"
+      
+         b. Center Section (~135ml / ~130g)
+            - size: "center"
+            - portion_label: "Center Section (~135ml / ~130g)"
+      
+         c. Narrow Section (~115ml / ~110g)
+            - size: "narrow"
+            - portion_label: "Narrow Section (~115ml / ~110g)"
+      
+         d. Main Section (~300ml / ~290g)
+            - size: "main"
+            - portion_label: "Main Section (~300ml / ~290g)"
+      
+      GENERAL RULES:
+      1. For breads and piece-based items: provide small, medium, and large servings
+      2. For all other foods: provide ONLY the four plate section servings (side, center, narrow, main)
+      3. Use the exact plate section names and measurements specified above
+      4. Return realistic values for the nutrition
+      5. List macros in grams (g) as positive numbers
+      6. Include non-zero values for fiber and sugar when appropriate
+      7. Make sure calorie counts make sense based on macros
+      8. Always specify weight in grams (weight_g) and volume in ml (volume_ml) when available
+      9. For items normally measured by piece/count, set volume_ml to null
+      10. For liquid foods, set weight_g to null and use volume_ml
+      11. For solid foods, set volume_ml to null and use weight_g
+      12. Do not include comments in the JSON output
+      
+      Category options: bread, rice, dal, curry, chutney, salad, beverage, snack, sweet, fruit
+      
+      If you don't know, just provide your best estimate based on similar foods.`;
+      
       console.log('Sending request to Gemini API...');
       const result = await this.model.generateContent({ 
         contents: [{ 
           role: 'user', 
           parts: [{ 
-            text: `Provide accurate nutrition information for: "${text}"
-
-First, determine if "${text}" is a LIQUID or SOLID food item.
-
-IMPORTANT: For LIQUIDS (milk, juice, water, etc):
-- ALWAYS use GLASS as the container, not katori
-- Set weight_g to null (JavaScript null, not string "null")
-- Set volume_ml to the actual volume in ml
-- Portion sizes should be: Small Glass (100ml), Glass (200ml), Large Glass (300ml)
-
-For SOLIDS (all other food items):
-- Use appropriate containers like katori, bowl, piece, etc.
-- Set volume_ml to null (JavaScript null, not string "null")
-- Set weight_g to the actual weight in grams
-
-Return ONLY a JSON object matching this structure (do not include any markdown):
-{
-  "name": "standard food name (English)",
-  "aliases": ["alias1", "alias2"],
-  "category": "bread | sabzi | dal | beverage | sweet | snack | dairy | etc.",
-  "servings": [
-    {
-      "size": "small",
-      "portion_label": "Description with quantity and unit",
-      "weight_g": number or null,     // Use null for liquids
-      "volume_ml": number or null,    // Use null for solids
-      "calories": number,
-      "protein_g": number,
-      "carbs_g": number,
-      "fat_g": number,
-      "fiber_g": number,
-      "sugar_g": number,
-      "sodium_mg": number
-    },
-    // medium and large portions follow same format
-  ]
-}
-
-IMPORTANT PORTION SIZE RULES:
-1. For vegetables dishes (sabzi):
-   - Small: 1 Small Katori (100g)
-   - Medium: 1 Katori (150g)
-   - Large: 1 Large Katori (200g)
-   - Protein: 2-4g per 100g for plain vegetable dishes
-   - Protein: 4-6g per 100g for dishes with peas or other legumes
-
-2. For rice, dals, curries:
-   - Small: 1 Small Katori (100g)
-   - Medium: 1 Katori (150g)
-   - Large: 1 Large Katori (200g)
-   - Protein: 2-3g per 100g for plain rice
-   - Protein: 7-9g per 100g for dals
-   - Protein: 6-15g per 100g for meat curries (depending on meat content)
-
-3. For breads (roti, chapati, paratha):
-   - Small: 1 Small Roti (25g)
-   - Medium: 1 Medium Roti (40g)
-   - Large: 1 Large Roti/Paratha (60g)
-   - Protein: 2-3g per roti/chapati
-   - Protein: 3-4g for stuffed parathas
-
-4. For snacks and sweets:
-   - Small: 1 Small Piece (30g)
-   - Medium: 1 Medium Piece (50g)
-   - Large: 1 Large Piece (75g)
-   - Protein: 1-3g per 100g for most sweet items
-   - Protein: 3-7g per 100g for snacks with legumes/nuts
-
-5. For beverages and liquid items (EXTREMELY IMPORTANT):
-   - Small: 1 Small Glass (100ml)
-   - Medium: 1 Glass (200ml)
-   - Large: 1 Large Glass (300ml)
-   - Set weight_g to null
-   - Set volume_ml to the actual volume (100, 200, or 300)
-   - For milk: 60-70 calories, 3-3.5g protein, 5g carbs, 3-4g fat per 100ml
-   - For fruit juices: 45-60 calories, 0-1g protein, 10-15g carbs, 0g fat per 100ml
-   - For tea/coffee: 1-2 calories, 0g protein, 0-1g carbs, 0g fat per 100ml (without milk/sugar)
-
-PORTION LABEL FORMAT:
-- For solid foods: Always specify the exact weight in grams in the portion_label
-  Example: "1 Small Katori (100g)" or "1 Medium Piece (50g)"
-- For liquid foods: Always specify the exact volume in ml in the portion_label
-  Example: "1 Small Glass (100ml)" or "1 Glass (200ml)"
-
-NUTRITIONAL VALUE GUIDELINES:
-- Vegetables: 20-40 calories, 1-3g protein, 3-8g carbs, 0-1g fat per 100g
-- Sabzi (cooked veg): 60-120 calories, 2-6g protein, 5-15g carbs, 2-8g fat per 100g
-- Rice (cooked): 130-150 calories, 2-3g protein, 28-30g carbs, 0-1g fat per 100g
-- Dal (cooked): 100-120 calories, 7-9g protein, 15-20g carbs, 0.5-2g fat per 100g
-- Roti/Chapati: 70-80 calories, 2-3g protein, 15g carbs, 0.3g fat per piece (25-30g)
-- Paratha: 150-180 calories, 3-4g protein, 20g carbs, 7-8g fat per piece (50-60g)
-- Milk: 60-70 calories, 3-3.5g protein, 5g carbs, 3-4g fat per 100ml
-
-NULL VALUES: For any field that might be null, you MUST use an actual JavaScript null value (not the string "null"). For example: "weight_g": null
-
-ALL VALUES MUST BE REALISTIC AND PROPORTIONAL TO WEIGHT/VOLUME.`
-          }] 
+            text: prompt,
+          }]
         }],
         generationConfig: {
           temperature: 0.2,
@@ -249,13 +165,17 @@ ALL VALUES MUST BE REALISTIC AND PROPORTIONAL TO WEIGHT/VOLUME.`
           throw new Error('Response missing or invalid servings array');
         }
         
-        // Ensure we have all required serving sizes
-        const requiredSizes = ['small', 'medium', 'large'];
+        // Ensure we have required serving sizes (either standard or plate sections)
+        const standardSizes = ['small', 'medium', 'large'];
+        const plateSectionSizes = ['side', 'center', 'narrow', 'main'];
         const sizes = nutritionData.servings.map(s => s.size);
-        const missingSizes = requiredSizes.filter(size => !sizes.includes(size));
         
-        if (missingSizes.length > 0) {
-          throw new Error(`Missing required serving sizes: ${missingSizes.join(', ')}`);
+        // Check if we have either all standard sizes OR all plate section sizes
+        const hasAllStandardSizes = standardSizes.every(size => sizes.includes(size));
+        const hasAllPlateSectionSizes = plateSectionSizes.every(size => sizes.includes(size));
+        
+        if (!hasAllStandardSizes && !hasAllPlateSectionSizes) {
+          throw new Error(`Missing required serving sizes. Need either standard sizes (${standardSizes.join(', ')}) or plate section sizes (${plateSectionSizes.join(', ')})`);
         }
         
         // Add metadata
@@ -290,13 +210,13 @@ ALL VALUES MUST BE REALISTIC AND PROPORTIONAL TO WEIGHT/VOLUME.`
  * @param {number} similarityThreshold - Minimum similarity threshold that wasn't met
  * @returns {Promise<Object>} - Nutrition information object
  */
-async function getFallbackNutrition(foodItem, similarityThreshold = 0.7) {
+async function getFallbackNutrition(foodItem, similarityThreshold = 0.85) {
   try {
     const geminiNutrition = new GeminiNutrition();
     const nutritionData = await geminiNutrition.getNutritionInfo(foodItem);
     
     // Only use Gemini data if confidence is high enough
-    if (nutritionData.confidence >= 0.7) {
+    if (nutritionData.confidence >= 0.85) {
       console.log('Using Gemini nutrition data for "' + foodItem + '" (confidence: ' + nutritionData.confidence.toFixed(2) + ')');
       
       // Map the Nutritionix-style fields to our standard format

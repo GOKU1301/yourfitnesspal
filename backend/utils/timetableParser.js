@@ -17,12 +17,16 @@ class TimetableParser {
    */
   async parseText(text) {
     try {
-      console.log('Parsing timetable text...');
+      console.log('🔍 [TIMETABLE_PARSER] Starting timetable text parsing...');
+      console.log('🔍 [TIMETABLE_PARSER] Raw text length:', text.length, 'characters');
+      console.log('🔍 [TIMETABLE_PARSER] First 200 characters:', text.substring(0, 200));
       
       // Split text into lines
       const lines = text.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0);
+      
+      console.log('🔍 [TIMETABLE_PARSER] Found', lines.length, 'non-empty lines');
       
       // Extract day-wise data
       const parsedData = {};
@@ -82,14 +86,21 @@ class TimetableParser {
               dinner: dinner.filter(item => item && item !== 'and')
             };
             
-            console.log(`Processed day: ${day}`);
+            console.log(`🔍 [TIMETABLE_PARSER] Processed day: ${day}`);
+            console.log(`🔍 [TIMETABLE_PARSER] ${day} meals:`, {
+              breakfast: breakfast.length + ' items',
+              lunch: lunch.length + ' items',
+              dinner: dinner.length + ' items'
+            });
           }
         }
       }
       
+      console.log('🔍 [TIMETABLE_PARSER] Parsing complete. Days found:', Object.keys(parsedData).join(', '));
+      console.log('🔍 [TIMETABLE_PARSER] Parsed data structure:', JSON.stringify(parsedData, null, 2));
       return parsedData;
     } catch (error) {
-      console.error('Error parsing timetable text:', error);
+      console.error('❌ [TIMETABLE_PARSER] Error parsing timetable text:', error);
       throw error;
     }
   }
@@ -101,7 +112,7 @@ class TimetableParser {
    */
   async parseTextFile(filePath) {
     try {
-      console.log(`Processing timetable text from: ${filePath}`);
+      console.log(`🔍 [TIMETABLE_PARSER] Processing timetable text from file: ${filePath}`);
       
       // Check if file exists
       if (!fs.existsSync(filePath)) {

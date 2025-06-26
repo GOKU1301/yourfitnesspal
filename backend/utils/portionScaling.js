@@ -202,13 +202,14 @@ export function generateScaledServings(baseServing = {}) {
     return servings;
   }
 
-  // 3. Solid foods (rice, sabzi, etc.) - by weight
+  // 3. All other foods (non-piece, non-beverage): use ONLY plate section servings
+  // Plate section sizes: side (~105ml/~100g), center (~135ml/~130g), narrow (~115ml/~110g), main (~300ml/~290g)
   if (baseServing.weight_g) {
-    const baseW = normalizeInput(baseServing.weight_g, 100, 500); // Cap at 500g
     servings.push(
-      createServing('small', '1 Small Katori (100g)', 100, null, null, 100/baseW),
-      createServing('medium', '1 Katori (200g)', 200, null, null, 200/baseW),
-      createServing('large', '1 Large Katori (300g)', 300, null, null, 300/baseW)
+      createServing('side', 'Side Section (~105ml / ~100g)', 100, 105, null, 100/normalizeInput(baseServing.weight_g, 100, 500)),
+      createServing('center', 'Center Section (~135ml / ~130g)', 130, 135, null, 130/normalizeInput(baseServing.weight_g, 100, 500)),
+      createServing('narrow', 'Narrow Section (~115ml / ~110g)', 110, 115, null, 110/normalizeInput(baseServing.weight_g, 100, 500)),
+      createServing('main', 'Main Section (~300ml / ~290g)', 290, 300, null, 290/normalizeInput(baseServing.weight_g, 100, 500))
     );
     return servings;
   }

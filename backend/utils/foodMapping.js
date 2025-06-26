@@ -220,50 +220,70 @@ async function findStandardFoodName(foodItem) {
   if (!foodItem) return '';
   
   const normalizedFoodItem = foodItem.toLowerCase().trim();
-  console.log(`\n🔍 Looking up: "${normalizedFoodItem}"`);
+  console.log(`\n🔍 [FOOD_MAPPING] Looking up food item: "${normalizedFoodItem}"`);
+  console.log(`🔍 [FOOD_MAPPING] Timestamp: ${new Date().toISOString()}`);
   
   // First check local mappings for exact match
   const localMappings = loadLocalMappings();
+  console.log(`🔍 [FOOD_MAPPING] Local mappings database has ${Object.keys(localMappings).length} entries`);
+  
   if (localMappings[normalizedFoodItem]) {
-    console.log(`✅ Found LOCAL mapping: "${normalizedFoodItem}" → "${localMappings[normalizedFoodItem]}"`);
+    console.log(`✅ [FOOD_MAPPING] Found LOCAL mapping: "${normalizedFoodItem}" → "${localMappings[normalizedFoodItem]}"`);
     return localMappings[normalizedFoodItem];
   }
+  
+  console.log(`🔍 [FOOD_MAPPING] No exact match found in local database for "${normalizedFoodItem}"`);
   
   // Import Nutritionix search function here to avoid circular dependencies
   const { findBestNutritionixMatch, addFoodMappingIfNew } = await import('./nutritionixSearch.js');
   
   try {
     // First try to find a match in Nutritionix
-    console.log(`🔎 Searching Nutritionix for: "${normalizedFoodItem}"`);
+    console.log(`🔎 [FOOD_MAPPING] Searching Nutritionix API for: "${normalizedFoodItem}"`);
     const nutritionixMatch = await findBestNutritionixMatch(normalizedFoodItem);
     
+    console.log(`🔎 [FOOD_MAPPING] Nutritionix search result:`, {
+      found: nutritionixMatch.found,
+      similarity: nutritionixMatch.similarity ? nutritionixMatch.similarity.toFixed(3) : 'N/A',
+      standardName: nutritionixMatch.standardName || 'N/A'
+    });
+    
     if (nutritionixMatch.found && nutritionixMatch.similarity >= 0.7) {
-      console.log(`✅ Found NUTRITIONIX match: "${normalizedFoodItem}" → "${nutritionixMatch.standardName}" (similarity: ${nutritionixMatch.similarity.toFixed(3)})`);
+      console.log(`✅ [FOOD_MAPPING] Found NUTRITIONIX match: "${normalizedFoodItem}" → "${nutritionixMatch.standardName}" (similarity: ${nutritionixMatch.similarity.toFixed(3)})`);
       
       // Add this mapping for future use
+      console.log(`🔄 [FOOD_MAPPING] Adding new mapping to database: "${normalizedFoodItem}" → "${nutritionixMatch.standardName}"`);
       await addFoodMappingIfNew(normalizedFoodItem, nutritionixMatch.standardName);
       return nutritionixMatch.standardName;
     }
     
-    console.log(`⚠️ No good Nutritionix match found, trying Pinecone...`);
+    console.log(`⚠️ [FOOD_MAPPING] No good Nutritionix match found for "${normalizedFoodItem}", trying Pinecone...`);
     
     // Fall back to Pinecone if Nutritionix didn't find a good match
     if (!pineconeInitialized) {
-      console.log('⚠️ Pinecone not initialized, using original food name');
+      console.log(`⚠️ [FOOD_MAPPING] Pinecone not initialized, using original food name: "${normalizedFoodItem}"`);
       return normalizedFoodItem;
     }
+    
+    console.log(`🔄 [FOOD_MAPPING] Pinecone status: ${pineconeInitialized ? 'Connected' : 'Not connected'}`);
 
-    console.log(`🔎 Searching Pinecone for: "${normalizedFoodItem}"`);
+    console.log(`🔎 [FOOD_MAPPING] Searching Pinecone for: "${normalizedFoodItem}"`);
+    console.log(`🔄 [FOOD_MAPPING] Generating embedding for "${normalizedFoodItem}"...`);
     const embedding = await generateEmbedding(normalizedFoodItem);
+    console.log(`🔄 [FOOD_MAPPING] Embedding generated, vector length: ${embedding.length}`);
+    console.log(`🔄 [FOOD_MAPPING] Querying Pinecone index: ${PINECONE_INDEX_NAME}`);
+    
     const queryResponse = await pineconeIndex.query({
       vector: embedding,
       topK: 5,
       includeMetadata: true,
       includeValues: false
     });
+    
+    console.log(`🔄 [FOOD_MAPPING] Pinecone query complete at: ${new Date().toISOString()}`);
 
     if (queryResponse.matches?.length > 0) {
-      console.log(`📊 Pinecone found ${queryResponse.matches.length} potential matches:`);
+      console.log(`📊 [FOOD_MAPPING] Pinecone found ${queryResponse.matches.length} potential matches:`);
       queryResponse.matches.forEach((match, i) => {
         console.log(`   ${i + 1}. "${match.metadata?.standardName || 'unknown'}" (score: ${match.score.toFixed(3)})`);
       });
@@ -272,22 +292,25 @@ async function findStandardFoodName(foodItem) {
       
       // Only use Pinecone match if we're very confident
       if (bestMatch.score > 0.8 && bestMatch.metadata?.standardName) {
-        console.log(`✅ Using PINE match: "${normalizedFoodItem}" → "${bestMatch.metadata.standardName}" (score: ${bestMatch.score.toFixed(3)})`);
+        console.log(`✅ [FOOD_MAPPING] Using PINECONE match: "${normalizedFoodItem}" → "${bestMatch.metadata.standardName}" (score: ${bestMatch.score.toFixed(3)})`);
         // Add this mapping for future use
+        console.log(`🔄 [FOOD_MAPPING] Adding successful Pinecone mapping to local database`);
         await addFoodMappingIfNew(normalizedFoodItem, bestMatch.metadata.standardName);
         return bestMatch.metadata.standardName;
       } else {
-        console.log(`⚠️ Best match score (${bestMatch.score.toFixed(3)}) below threshold (0.8), using original`);
+        console.log(`⚠️ [FOOD_MAPPING] Best Pinecone match score (${bestMatch.score.toFixed(3)}) below threshold (0.8), using original`);
       }
     } else {
-      console.log('⚠️ No matches found in Pinecone');
+      console.log('⚠️ [FOOD_MAPPING] No matches found in Pinecone vector database');
     }
   } catch (error) {
-    console.error('❌ Pinecone search error:', error.message);
+    console.error('❌ [FOOD_MAPPING] Search error:', error.message);
+    console.error('❌ [FOOD_MAPPING] Error stack:', error.stack);
   }
   
   // If no match found or score too low, return the original
-  console.log(`ℹ️ No suitable mapping found, using original: "${normalizedFoodItem}"`);
+  console.log(`ℹ️ [FOOD_MAPPING] No suitable mapping found, using original: "${normalizedFoodItem}"`);
+  console.log(`ℹ️ [FOOD_MAPPING] Mapping process complete at: ${new Date().toISOString()}`);
   return normalizedFoodItem;
 }
 

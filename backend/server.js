@@ -10,7 +10,7 @@ import { findBestNutritionixMatch } from './utils/nutritionixSearch.js';
 import { addFoodMapping } from './utils/foodMapping.js';
 import { processAndStoreNutrition } from './utils/nutritionPipeline.js';
 import TimetableParser from './utils/timetableParser.js';
-import authRoutes from './routes/auth.js';
+
 import { verifyToken, isAdmin } from './middleware/auth.js';
 import mongoose from 'mongoose';
 import Meal from './models/Meal.js';
@@ -79,27 +79,38 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if(!origin) return callback(null, true);
+    
+    // Define allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',              // Local development
+      'https://yourfitnesspal.vercel.app',  // Production frontend
+      process.env.FRONTEND_URL || ''        // Environment-specific frontend URL
+    ].filter(Boolean); // Remove empty strings
+    
+    if(allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked request from:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token']
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
-// Serve images directory as static files
-const imagesPath = path.join(__dirname, 'images');
-console.log('Images directory path:', imagesPath); // Debug path resolution
-app.use('/images', express.static(imagesPath));
+// Log info about MongoDB-based image storage
+console.log('Using MongoDB for timetable image storage');
 
-// Direct route to serve timetable image (for debugging)
+// Redirect legacy timetable image route to MongoDB-based endpoint
 app.get('/timetable-image', (req, res) => {
-  const imagePath = path.join(__dirname, 'images', 'currenttimetable.jpeg');
-  console.log('Trying to serve image from:', imagePath);
-  fs.access(imagePath, fs.constants.F_OK, (err) => {
-    if (err) {
-      console.error('Image file not accessible:', err);
-      return res.status(404).send('Image not found');
-    }
-    res.sendFile(imagePath);
-  });
+  console.log('Legacy timetable image route accessed, redirecting to MongoDB endpoint');
+  res.redirect('/api/timetable/current');
 });
 
 // Log all requests for debugging
@@ -109,6 +120,10 @@ app.use((req, res, next) => {
 });
 
 // API routes
+import timetableRoutes from './routes/timetable.js';
+import authRoutes from './routes/auth.js';
+
+app.use('/api/timetable', timetableRoutes);
 app.use('/api/auth', authRoutes);
 
 /**
@@ -439,292 +454,6 @@ console.log("Devansh is saying current meal is ", mealType);
   }
 });
 
-// Create images directory if it doesn't exist
-if (!fs.existsSync('./images')) {
-  fs.mkdirSync('./images');
-}
-
-// Configure multer for disk storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'images/')
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'timetable-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: { 
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 1 // Allow only 1 file
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  }
-});
-
-// Ensure images directory exists
-const imagesDir = path.join(__dirname, 'images');
-fs.mkdirSync(imagesDir, { recursive: true });
-
-// Supported image MIME types
-const SUPPORTED_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-// Protected admin route for file upload
-app.post('/api/upload', verifyToken, isAdmin, upload.single('timetable'), async (req, res) => {
-  try {
-    // Verify MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
-      console.error('❌ MongoDB not connected');
-      return res.status(503).json({ 
-        success: false, 
-        error: 'Database not available' 
-      });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'No file uploaded' 
-      });
-    }
-
-    console.log('Processing uploaded image...');
-    console.log('Uploaded file details:', {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      path: req.file.path
-    });
-
-    // The file is already saved by multer.diskStorage
-    const imagePath = req.file.path;
-    
-    // Verify file was written correctly
-    if (!fs.existsSync(imagePath)) {
-      throw new Error('Failed to save image file');
-    }
-    
-    const stats = fs.statSync(imagePath);
-    console.log(`Saved image file size: ${stats.size} bytes`);
-    
-    if (stats.size === 0) {
-      throw new Error('Image file is empty after save');
-    }
-    
-    // Process the image to extract text using Gemini API
-    console.log('Extracting text from image...');
-    const processor = new GeminiProcessor();
-    const extractedText = await processor.extractTextFromImage(imagePath);
-    console.log('Text extraction completed');
-    console.log('Extracted text sample:', extractedText.substring(0, 200) + '...');
-    
-    // Save the extracted text
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const outputPath = path.join('data', 'extracted', `timetable-${timestamp}.txt`);
-    
-    // Ensure directory exists
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, extractedText);
-    
-    console.log('Extracted text saved to:', outputPath);
-    
-    // Parse the timetable text into structured data
-    console.log('Parsing timetable data...');
-    const timetableParser = new TimetableParser();
-    const parsedTimetable = await timetableParser.parseText(extractedText);
-    console.log('Parsed timetable data:', JSON.stringify(parsedTimetable, null, 2));
-    
-    // Save parsed data to database
-    console.log('Saving timetable data to database...');
-    
-    // Set menu period (current week)
-    const menuStartDate = new Date();
-    menuStartDate.setHours(0, 0, 0, 0);
-    // Set to start of week (Sunday)
-    menuStartDate.setDate(menuStartDate.getDate() - menuStartDate.getDay());
-    
-    const menuEndDate = new Date(menuStartDate);
-    menuEndDate.setDate(menuStartDate.getDate() + 6); // End of week (Saturday)
-    menuEndDate.setHours(23, 59, 59, 999);
-    
-    console.log('Saving menu for period:', 
-      `${menuStartDate.toLocaleDateString()} to ${menuEndDate.toLocaleDateString()}`);
-    
-    // Save each day's meals
-    for (const [day, meals] of Object.entries(parsedTimetable)) {
-      const dayDate = new Date();
-      // Set day of week to match the parsed day
-      const dayIndex = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(day.toLowerCase());
-      const currentDayIndex = dayDate.getDay();
-      dayDate.setDate(dayDate.getDate() + (dayIndex - currentDayIndex + 7) % 7);
-      
-      try {
-        // Create or update meal entry
-        const result = await Meal.findOneAndUpdate(
-          { 
-            day: day,
-            menuStartDate: menuStartDate,
-            menuEndDate: menuEndDate
-          },
-          {
-            day: day,
-            dayDate: dayDate,
-            menuStartDate: menuStartDate,
-            menuEndDate: menuEndDate,
-            meals: {
-              breakfast: meals.breakfast || [],
-              lunch: meals.lunch || [],
-              dinner: meals.dinner || []
-            }
-          },
-          { 
-            upsert: true, 
-            new: true, 
-            setDefaultsOnInsert: true,
-            useFindAndModify: false
-          }
-        );
-        
-        console.log(`Saved menu for ${day}:`, result);
-      } catch (dbError) {
-        console.error(`Error saving menu for ${day}:`, dbError);
-        throw dbError; // Re-throw to be caught by the outer try-catch
-      }
-    }
-    
-    // Process food items for nutrition mapping
-    const allFoodItems = Object.values(parsedTimetable).flatMap(dayMeals => 
-      Object.values(dayMeals).flat()
-    );
-    
-    console.log(`Found ${allFoodItems.length} unique food items in the timetable`);
-    
-    const uniqueFoodItems = [...new Set(allFoodItems)];
-
-    // ⬇️ Fetch nutrition info and store in DB
-    let nutritionStats = { saved: 0, skipped: 0, errors: [] };
-    if (uniqueFoodItems.length > 0) {
-      console.log(`\n🔍 Storing nutrition for ${uniqueFoodItems.length} unique food items...`);
-      nutritionStats = await processAndStoreNutrition(uniqueFoodItems);
-      console.log(`✅ Nutrition stored. Saved: ${nutritionStats.saved}, Skipped: ${nutritionStats.skipped}`);
-      if (nutritionStats.errors.length) {
-        console.log('⚠️ Errors in nutrition processing:', nutritionStats.errors);
-      }
-    }
-    
-    if (uniqueFoodItems.length > 0) {
-      // console.log(`\n🔍 Processing ${uniqueFoodItems.length} unique food items for nutrition mapping...`);
-      
-      let addedCount = 0; // Initialize addedCount here
-      
-      for (const item of uniqueFoodItems) {
-        // console.log(`\nProcessing: "${item}"`);
-        
-        try {
-          // Find best match in Nutritionix or local mappings
-          const match = await findBestNutritionixMatch(item);
-          
-          if (match.found && match.similarity > 0.6) {
-            console.log(`✅ Found match: "${match.standardName}" (similarity: ${match.similarity.toFixed(3)})`);
-            
-            // Add to mappings
-            const { added } = await addFoodMapping(match.originalName, match.standardName);
-            if (added) {
-              console.log(`📝 Added mapping: "${match.originalName}" → "${match.standardName}"`);
-              addedCount++;
-            } else {
-              console.log(`ℹ️ Mapping already exists for "${match.originalName}"`);
-            }
-          } else {
-            console.log(`⚠️ No good match found for "${item}"`);
-          }
-        } catch (error) {
-          console.error(`Error processing food item "${item}":`, error);
-          // Continue with next item even if one fails
-        }
-        
-        // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-    }
-    
-    
-    // Return success response
-    const response = {
-      success: true,
-      message: 'Timetable processed successfully',
-      data: {
-        imageUrl: `/images/${req.file.filename}`,
-        daysProcessed: Object.keys(parsedTimetable).length,
-        totalFoodItems: allFoodItems.length,
-        uniqueFoodItems: uniqueFoodItems.length,
-        nutritionSaved: nutritionStats.saved,
-        nutritionSkipped: nutritionStats.skipped,
-        nutritionErrors: nutritionStats.errors.length,
-        menuPeriod: {
-          start: menuStartDate.toISOString(),
-          end: menuEndDate.toISOString()
-        }
-      }
-    };
-    
-    console.log('\n✅ Upload processed successfully:', JSON.stringify(response, null, 2));
-    return res.status(200).json(response);
-    
-  } catch (error) {
-    console.error('Error processing image:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to process image' 
-    });
-  }
-});
-
-/**
- * Get meal plans within a date range
- */
-app.get('/api/meals', verifyToken, async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'startDate and endDate query parameters are required'
-      });
-    }
-
-    const meals = await Meal.find({
-      dayDate: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      }
-    }).sort({ dayDate: 1 });
-
-    res.status(200).json({
-      success: true,
-      data: meals
-    });
-  } catch (error) {
-    console.error('Error fetching meal plans:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch meal plans'
-    });
-  }
-});
-
-console.log('Registering /api/nutrition route');
-
 /**
  * Get nutrition data for specific food items
  */
@@ -886,6 +615,161 @@ app.get('/debug/routes', (req, res) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ error: err.message || 'Server error' });
+});
+
+// Import MenuImage model
+const getMenuImageModel = async () => {
+  try {
+    return (await import('./models/MenuImage.js')).default;
+  } catch (error) {
+    console.error('Error importing MenuImage model:', error);
+    throw error;
+  }
+};
+
+// Configure multer for memory storage (for MongoDB)
+const storage = multer.memoryStorage();
+
+const upload = multer({
+  storage: storage,
+  limits: { 
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 1 // Allow only 1 file
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// Supported image MIME types
+const SUPPORTED_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Import the routes
+
+
+// Legacy route for backward compatibility
+// Redirects to the new timetable upload endpoint
+app.post('/api/timetable/upload', isAdmin, upload.single('image'), async (req, res) => {
+  try {
+    // Verify MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      console.error('❌ MongoDB not connected');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Database not available' 
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'No file uploaded' 
+      });
+    }
+
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 📸 TIMETABLE UPLOAD: Processing uploaded timetable image...`);
+    console.log(`[${timestamp}] 📃 TIMETABLE DETAILS:`, {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+    
+    // Get the MenuImage model
+    const MenuImage = await getMenuImageModel();
+    
+    // Remove any existing timetable images
+    await MenuImage.deleteMany({ filename: 'currenttimetable.jpeg' });
+    
+    // Create a new timetable image document
+    const menuImage = new MenuImage({
+      filename: 'currenttimetable.jpeg',
+      image: req.file.buffer,
+      contentType: req.file.mimetype
+    });
+    
+    // Save the image to MongoDB
+    const savedImage = await menuImage.save();
+    console.log(`[${new Date().toISOString()}] 💾 MONGODB: Timetable image saved to MongoDB successfully`);
+    
+    if (!req.file.buffer || req.file.buffer.length === 0) {
+      throw new Error('Image buffer is empty');
+    }
+    
+    // Process the image buffer with Gemini API
+    console.log(`[${new Date().toISOString()}] 🔍 OCR STARTED: Extracting text from image using Gemini API...`);
+    const processor = new GeminiProcessor();
+    const extractedText = await processor.extractTextFromImageBuffer(req.file.buffer, req.file.mimetype);
+    console.log(`[${new Date().toISOString()}] ✅ OCR COMPLETED: Successfully extracted text from image`);
+    console.log(`[${new Date().toISOString()}] 📄 SAMPLE TEXT: ${extractedText.substring(0, 200)}...`);
+    
+    // Save the extracted text to a MongoDB document if needed in the future
+    // For now we just log it
+    console.log(`[${new Date().toISOString()}] 🔄 PROCESSING: Starting timetable data parsing...`);
+    
+    // Parse the timetable text into structured data
+    const timetableParser = new TimetableParser();
+    console.log(`[${new Date().toISOString()}] 🧩 PARSING: Converting extracted text to structured timetable...`);
+    const parsedTimetable = await timetableParser.parseText(extractedText);
+    console.log(`[${new Date().toISOString()}] ✅ PARSING COMPLETED: Successfully parsed timetable structure`);
+    
+    // DONE: Timetable image uploaded and processed by admin.
+    // Only log the parsed timetable, do not save or process further.
+    console.log(`[${new Date().toISOString()}] 🎯 FINAL RESULT: Timetable parsing complete`);
+    console.log(`[${new Date().toISOString()}] 📋 PARSED TIMETABLE DATA:`);
+    console.log(JSON.stringify(parsedTimetable, null, 2));
+    res.status(200).json({
+      success: true,
+      message: 'Timetable uploaded and parsed successfully',
+      parsedTimetable
+    });
+    // END of handler. No further processing.
+  } catch (error) {
+    console.error('❌ Error in timetable upload:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to process timetable' 
+    });
+  }
+});
+
+/**
+ * Get meal plans within a date range
+ */
+app.get('/api/meals', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate query parameters are required'
+      });
+    }
+
+    const meals = await Meal.find({
+      dayDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    }).sort({ dayDate: 1 });
+
+    res.status(200).json({
+      success: true,
+      data: meals
+    });
+  } catch (error) {
+    console.error('Error fetching meal plans:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch meal plans'
+    });
+  }
 });
 
 const PORT = process.env.PORT || 5000;

@@ -10,6 +10,7 @@ import { isLiquidFood, formatFoodPortion } from './foodUtils.js';
  */
 async function processAndStoreNutrition(foodItems = []) {
   console.log('=== NUTRITION PIPELINE STARTED ===');
+  console.log('🍽️ [NUTRITION_PIPELINE] Start timestamp:', new Date().toISOString());
   const gemini = new GeminiNutrition();
   let saved = 0;
   let skipped = 0;
@@ -17,7 +18,8 @@ async function processAndStoreNutrition(foodItems = []) {
 
   // Remove duplicates & trim
   const unique = [...new Set(foodItems.map(f => (f || '').trim()).filter(Boolean))];
-  console.log(`[NutritionPipeline] Processing ${unique.length} unique items:`, unique);
+  console.log(`🍽️ [NUTRITION_PIPELINE] Processing ${unique.length} unique items:`, unique);
+  console.log(`🍽️ [NUTRITION_PIPELINE] Raw input items count: ${foodItems.length}, Unique items count: ${unique.length}`);
 
   for (const item of unique) {
     try {
@@ -30,7 +32,12 @@ async function processAndStoreNutrition(foodItems = []) {
       }
 
       // Try to get nutrition from Nutritionix first
+      console.log(`🍽️ [NUTRITION_PIPELINE] Fetching nutrition for "${item}" from Nutritionix...`);
       const nutritionixResult = await getNutritionInfo(item);
+      console.log(`🍽️ [NUTRITION_PIPELINE] Nutritionix result for "${item}": ${nutritionixResult ? 'Data received' : 'No data'}`);
+      if (nutritionixResult) {
+        console.log(`🍽️ [NUTRITION_PIPELINE] Nutritionix match found: ${nutritionixResult.standardName || 'N/A'}, similarity: ${nutritionixResult.similarity ? nutritionixResult.similarity.toFixed(3) : 'N/A'}`);
+      }
       const MIN_SIMILARITY = 0.700; // Minimum similarity score to trust Nutritionix result
 
       // Use the correct similarity value for fallback logic
@@ -43,15 +50,19 @@ async function processAndStoreNutrition(foodItems = []) {
                       (nutritionixResult.bestMatch ? 
                        `low similarity (${nutritionixResult.bestMatch.similarity.toFixed(2)})` : 'no nutrition data');
         
-        console.log(`[NutritionPipeline] Falling back to Gemini for "${item}": ${reason}`);
+        console.log(`🍽️ [NUTRITION_PIPELINE] Falling back to Gemini for "${item}": ${reason}`);
+        console.log(`🍽️ [NUTRITION_PIPELINE] Gemini request timestamp: ${new Date().toISOString()}`);
         
         const geminiResult = await gemini.getNutritionInfo(item);
+        console.log(`🍽️ [NUTRITION_PIPELINE] Gemini result for "${item}": ${geminiResult ? 'Success' : 'Failed'}`);
         if (geminiResult) {
+          console.log(`🍽️ [NUTRITION_PIPELINE] Gemini nutrition data for "${item}": Category: ${geminiResult.category || 'unknown'}, Servings: ${geminiResult.servings ? geminiResult.servings.length : 0}`);
           await saveNutritionToDb({
             name: item,
             category: geminiResult.category || 'unknown',
             servings: geminiResult.servings || []
           }, false);
+          console.log(`🍽️ [NUTRITION_PIPELINE] Saved Gemini nutrition data for "${item}" to database`);
           saved++;
         } else {
           console.error(`[NutritionPipeline] No nutrition data available for "${item}"`);
@@ -66,7 +77,7 @@ async function processAndStoreNutrition(foodItems = []) {
         const base = nutritionixResult.nutrition;
         
         // Check if this is a piece-based food (like sweets) that should use piece-based scaling
-        const isPieceBasedFood = base.serving_unit && ['piece', 'pieces', 'ball', 'balls', 'cookie', 'cookies'].includes(base.serving_unit.toLowerCase());
+        const isPieceBasedFood = base.serving_unit && typeof base.serving_unit === 'string' && ['piece', 'pieces', 'ball', 'balls', 'cookie', 'cookies'].includes(base.serving_unit.toLowerCase());
         
         if (isPieceBasedFood) {
           console.log(`[NutritionPipeline] Detected "${item}" as a PIECE-BASED food item with serving unit: ${base.serving_unit}`);
@@ -127,77 +138,64 @@ async function processAndStoreNutrition(foodItems = []) {
             ]
           };
         } else {
-          // Standard flow - Ask Gemini for portion sizes
-          const prompt = `For the food item "${item}", provide typical small, medium, and large portion sizes using common Indian household measurements that a normal person would use without a kitchen scale.
-          the value of each portion be default to 1 and unit be increased as per the portions for eg 1 bowl of rice with small portion weighs 100g,1 bowl for medium portion weighs 200g and large 300g  this is just a sample example,y
-          IMPORTANT: Respond ONLY with a valid JSON object in this exact format:
-        {
-          "small": { "value": number, "unit": "unit_type" },
-          "medium": { "value": number, "unit": "unit_type" },
-          "large": { "value": number, "unit": "unit_type" },
-          "isLiquid": boolean  // true if this is a liquid item like milk, dal, etc.
-        }
+          // Map Nutritionix data to plate section servings using final user estimates
+          const PLATE_SECTIONS = [
+            { size: 'side', portion_label: 'Side Section (~105ml / ~100g)', volume_ml: 105, weight_g: 100 },
+            { size: 'center', portion_label: 'Center Section (~135ml / ~130g)', volume_ml: 135, weight_g: 130 },
+            { size: 'narrow', portion_label: 'Narrow Section (~115ml / ~110g)', volume_ml: 115, weight_g: 110 },
+            { size: 'main', portion_label: 'Main Section (~300ml / ~290g)', volume_ml: 300, weight_g: 290 }
+          ];
+
+          // Determine if food is liquid (use your isLiquidFood util if available)
+          const isLiquid = isLiquidFood ? isLiquidFood(item) : false;
+
+          // Nutritionix base is per 100g or per serving_size_g
+          const baseWeight = base.serving_size_g || 100;
+          const baseCalories = base.calories;
+          const baseProtein = base.protein_g;
+          const baseCarbs = base.carbohydrates_total_g;
+          const baseFat = base.fat_total_g;
+          const baseFiber = base.fiber_g;
+          const baseSugar = base.sugar_g;
+
+          // Helper to scale nutrients from baseWeight to targetWeight
+          const scale = (value, targetWeight) => value && baseWeight ? Math.round((value * targetWeight / baseWeight) * 10) / 10 : null;
+
+          nutritionData = {
+            name: item,
+            aliases: [],
+            category: nutritionixResult.standardName || '',
+            servings: PLATE_SECTIONS.map(section => ({
+              size: section.size,
+              portion_label: section.portion_label,
+              weight_g: isLiquid ? null : section.weight_g,
+              volume_ml: isLiquid ? section.volume_ml : null,
+              calories: scale(baseCalories, isLiquid ? section.volume_ml : section.weight_g),
+              protein: scale(baseProtein, isLiquid ? section.volume_ml : section.weight_g),
+              carbs: scale(baseCarbs, isLiquid ? section.volume_ml : section.weight_g),
+              fat: scale(baseFat, isLiquid ? section.volume_ml : section.weight_g),
+              fiber: scale(baseFiber, isLiquid ? section.volume_ml : section.weight_g),
+              sugar: scale(baseSugar, isLiquid ? section.volume_ml : section.weight_g),
+              _source: 'nutritionix',
+              _originalServingSize: baseWeight,
+              _originalCalories: baseCalories
+            }))
+          };
         
-        Use these units based on food type:
-        - For liquids (milk, dal, curry): "glass" (1 glass = 200ml) or "bowl" (1 bowl = 150ml)
-        - For rice, dal (dry): "katori" (1 katori = 100g) or "plate" (1 plate = 200g)
-        - For roti/paratha: "count" (number of pieces)
-        - For dry snacks: "katori" or "handful"
-        - For vegetables: "katori" or pieces
-        - For curd/raita: "katori" or "tbsp"
-        -For solid sweets : piece and size of piece
-        -For liquid sweets : cup with cup size mentioned in ml
         
-        
-        Examples:
-        For "dal" (liquid):
-        {
-          "small": { "value": 1, "unit": "katori (100ml)" },
-          "medium": { "value": 1, "unit": "katori (200ml)" },
-          "large": { "value": 1, "unit": "katori (300ml)" },
-          "isLiquid": true
-        }
-        
-        For "rice":
-        {
-          "small": { "value": 1, "unit": "katori (50g)" },
-          "medium": { "value": 1, "unit": "katori (100g)" },
-          "large": { "value": 1, "unit": "katori (200g)" },
-          "isLiquid": false
-        }
-        
-        For "milk":
-        {
-          "small": { "value": 0.5, "unit": "glass (100ml)" },
-          "medium": { "value": 1, "unit": "glass (200ml)" },
-          "large": { "value": 1.5, "unit": "glasses (300ml)" },
-          "isLiquid": true
-        }
-        
-        For "roti":
-        {
-          "small": { "value": 1, "unit": "piece" },
-          "medium": { "value": 2, "unit": "pieces" },
-          "large": { "value": 3, "unit": "pieces" },
-          "isLiquid": false
-        }`;
+        // Remove the code that references undefined prompt variable
+        // This was causing the "prompt is not defined" error
         let portionSizes;
         try {
-          const geminiPortion = await gemini.model.generateContent(prompt);
-          const responseText = geminiPortion.response.text().trim();
-          
-          // Try to extract JSON from markdown code blocks if present
-          const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || 
-                          [null, responseText];
-          
-          try {
-            portionSizes = JSON.parse(jsonMatch[1] || responseText);
-          } catch (parseError) {
-            console.error(`[NutritionPipeline] Failed to parse Gemini response as JSON. Response was:`, responseText);
-            throw new Error('Invalid JSON response from Gemini');
-          }
+          // Create default portionSizes directly instead of calling Gemini here
+          // (we already have NutritionIX data at this point)
+          portionSizes = {
+            small: { value: 1, unit: 'small portion' },
+            medium: { value: 1, unit: 'medium portion' },
+            large: { value: 1, unit: 'large portion' }
+          };
         } catch (err) {
-          console.error(`[NutritionPipeline] Gemini portion size error for "${item}":`, err.message);
+          console.error(`[NutritionPipeline] Gemini nutrition fallback error for "${item}": ${err.message}`);
           // Fallback to reasonable defaults
           portionSizes = {
             small: 100,
@@ -354,15 +352,102 @@ async function processAndStoreNutrition(foodItems = []) {
           _source: nutritionData.servings[0]._source || 'nutritionix'  // Mark source for scaling logic
         };
         
-        // Replace servings with our improved scaled servings
-        console.log(`[NutritionPipeline] Applying improved portion scaling for "${item}"...`);
-        nutritionData.servings = generateScaledServings(baseServing);
+        // ENFORCE PLATE SECTION FORMAT FOR ALL NON-PIECE FOODS
+        const isBreadOrPiece = item && typeof item === 'string' && [
+          'roti','paratha','poori','puri','bread','naan','kulcha','ladoo','laddu','ball','cookie','biscuit','idli','vada','vadai','pakora','cutlet','samosa'
+        ].some(b => typeof item === 'string' && item.toLowerCase().includes(b));
+
+        if (!isBreadOrPiece) {
+          console.log(`[NutritionPipeline] Mapping "${item}" to plate sections...`);
+          
+          // Map to plate sections
+          const PLATE_SECTIONS = [
+            { size: 'side', portion_label: 'Side Section (~105ml / ~100g)', volume_ml: 105, weight_g: 100 },
+            { size: 'center', portion_label: 'Center Section (~135ml / ~130g)', volume_ml: 135, weight_g: 130 },
+            { size: 'narrow', portion_label: 'Narrow Section (~115ml / ~110g)', volume_ml: 115, weight_g: 110 },
+            { size: 'main', portion_label: 'Main Section (~300ml / ~290g)', volume_ml: 300, weight_g: 290 }
+          ];
+          
+          const baseWeight = baseServing.weight_g || 100;
+          const baseCalories = baseServing.calories;
+          const baseProtein = baseServing.protein || baseServing.protein_g;
+          const baseCarbs = baseServing.carbs || baseServing.carbs_g;
+          const baseFat = baseServing.fat || baseServing.fat_g;
+          const baseFiber = baseServing.fiber || baseServing.fiber_g;
+          const baseSugar = baseServing.sugar || baseServing.sugar_g;
+          const isLiquid = typeof isLiquidFood === 'function' && item ? isLiquidFood(item) : false;
+          const scale = (value, targetWeight) => value && baseWeight ? Math.round((value * targetWeight / baseWeight) * 10) / 10 : null;
+          
+          nutritionData.servings = PLATE_SECTIONS.map(section => ({
+            size: section.size,
+            portion_label: section.portion_label,
+            weight_g: isLiquid ? null : section.weight_g,
+            volume_ml: isLiquid ? section.volume_ml : null,
+            calories: scale(baseCalories, isLiquid ? section.volume_ml : section.weight_g),
+            protein: scale(baseProtein, isLiquid ? section.volume_ml : section.weight_g),
+            carbs: scale(baseCarbs, isLiquid ? section.volume_ml : section.weight_g),
+            fat: scale(baseFat, isLiquid ? section.volume_ml : section.weight_g),
+            fiber: scale(baseFiber, isLiquid ? section.volume_ml : section.weight_g),
+            sugar: scale(baseSugar, isLiquid ? section.volume_ml : section.weight_g),
+            _source: 'nutritionix',
+            _originalServingSize: baseWeight,
+            _originalCalories: baseCalories,
+            _mappedToPlateSection: true
+          }));
+        } else {
+          // For piece-based foods, keep the existing servings
+          console.log(`[NutritionPipeline] Keeping piece-based servings for "${item}"...`);
+        }
       }
       
       // If Nutritionix failed or portion sizes failed, fallback to Gemini for everything
       if (!nutritionData) {
         try {
+          console.log(`[NutritionPipeline] Falling back to Gemini for "${item}"...`);
           nutritionData = await gemini.getNutritionInfo(item);
+
+          // --- ENFORCE PLATE SECTION SERVINGS FOR GEMINI ---
+          // Only for non-piece-based foods
+          const isBreadOrPiece = item && typeof item === 'string' && [
+            'roti','paratha','poori','puri','bread','naan','kulcha','ladoo','laddu','ball','cookie','biscuit','idli','vada','vadai','pakora','cutlet','samosa'
+          ].some(b => typeof item === 'string' && item.toLowerCase().includes(b));
+
+          if (nutritionData && nutritionData.servings && !isBreadOrPiece) {
+            // Map to plate sections
+            const PLATE_SECTIONS = [
+              { size: 'side', portion_label: 'Side Section (~105ml / ~100g)', volume_ml: 105, weight_g: 100 },
+              { size: 'center', portion_label: 'Center Section (~135ml / ~130g)', volume_ml: 135, weight_g: 130 },
+              { size: 'narrow', portion_label: 'Narrow Section (~115ml / ~110g)', volume_ml: 115, weight_g: 110 },
+              { size: 'main', portion_label: 'Main Section (~300ml / ~290g)', volume_ml: 300, weight_g: 290 }
+            ];
+            // Use first serving as base for scaling
+            const base = nutritionData.servings[0];
+            const baseWeight = base.weight_g || 100;
+            const baseCalories = base.calories;
+            const baseProtein = base.protein || base.protein_g;
+            const baseCarbs = base.carbs || base.carbs_g;
+            const baseFat = base.fat || base.fat_g;
+            const baseFiber = base.fiber || base.fiber_g;
+            const baseSugar = base.sugar || base.sugar_g;
+            const isLiquid = isLiquidFood ? isLiquidFood(item) : false;
+            const scale = (value, targetWeight) => value && baseWeight ? Math.round((value * targetWeight / baseWeight) * 10) / 10 : null;
+            nutritionData.servings = PLATE_SECTIONS.map(section => ({
+              size: section.size,
+              portion_label: section.portion_label,
+              weight_g: isLiquid ? null : section.weight_g,
+              volume_ml: isLiquid ? section.volume_ml : null,
+              calories: scale(baseCalories, isLiquid ? section.volume_ml : section.weight_g),
+              protein: scale(baseProtein, isLiquid ? section.volume_ml : section.weight_g),
+              carbs: scale(baseCarbs, isLiquid ? section.volume_ml : section.weight_g),
+              fat: scale(baseFat, isLiquid ? section.volume_ml : section.weight_g),
+              fiber: scale(baseFiber, isLiquid ? section.volume_ml : section.weight_g),
+              sugar: scale(baseSugar, isLiquid ? section.volume_ml : section.weight_g),
+              _source: 'gemini',
+              _originalServingSize: baseWeight,
+              _originalCalories: baseCalories
+            }));
+          }
+          // --- END ENFORCE ---
         } catch (err) {
           console.error(`[NutritionPipeline] Gemini nutrition fallback failed for "${item}": ${err.message}`);
           skipped++;
@@ -371,7 +456,7 @@ async function processAndStoreNutrition(foodItems = []) {
       }
 
       // Check if this is a liquid food and format appropriately
-      const isLiquid = isLiquidFood(item);
+      const isLiquid = typeof isLiquidFood === 'function' && item ? isLiquidFood(item) : false;
       if (isLiquid) {
         console.log(`[NutritionPipeline] Detected "${item}" as a LIQUID food item.`);
         
@@ -409,6 +494,8 @@ async function processAndStoreNutrition(foodItems = []) {
   console.log(`\n=== NUTRITION PIPELINE COMPLETED ===`);
   console.log(`Saved: ${saved}, Skipped: ${skipped}, Errors: ${errors.length}`);
 
+  console.log(`🍽️ [NUTRITION_PIPELINE] Processing complete at: ${new Date().toISOString()}`);
+  console.log(`🍽️ [NUTRITION_PIPELINE] Summary: Saved: ${saved}, Skipped: ${skipped}, Errors: ${errors.length}`);
   return { saved, skipped, errors };
 }
 

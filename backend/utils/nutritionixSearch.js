@@ -26,8 +26,10 @@ if (!NUTRITIONIX_APP_ID || !NUTRITIONIX_APP_KEY) {
  */
 async function searchNutritionix(query) {
   try {
-    console.log(`🔍 Searching Nutritionix for: "${query}"`);
+    console.log(`🔍 [NUTRITIONIX_SEARCH] Searching API for: "${query}"`);
+    console.log(`🔍 [NUTRITIONIX_SEARCH] Request timestamp: ${new Date().toISOString()}`);
     
+    const startTime = Date.now();
     const response = await axios({
       method: 'GET',
       url: 'https://trackapi.nutritionix.com/v2/search/instant',
@@ -42,20 +44,37 @@ async function searchNutritionix(query) {
       }
     });
     
+    const endTime = Date.now();
+    console.log(`🔍 [NUTRITIONIX_SEARCH] API response time: ${endTime - startTime}ms`);
+    
     // Combine common and branded foods
     const allFoods = [
       ...(response.data.common || []),
       ...(response.data.branded || [])
     ];
     
-    console.log(`✅ Found ${allFoods.length} matches for "${query}"`);
+    console.log(`✅ [NUTRITIONIX_SEARCH] Found ${allFoods.length} matches for "${query}"`);
+    console.log(`🔍 [NUTRITIONIX_SEARCH] Common foods: ${response.data.common?.length || 0}, Branded foods: ${response.data.branded?.length || 0}`);
+    
+    if (allFoods.length > 0) {
+      console.log(`🔍 [NUTRITIONIX_SEARCH] First match: "${allFoods[0].food_name || allFoods[0].brand_name + ' ' + allFoods[0].food_name || 'unknown'}"`);
+    }
+    
     return allFoods;
   } catch (error) {
-    console.error(`❌ Error searching Nutritionix for "${query}":`, error.message);
+    console.error(`❌ [NUTRITIONIX_SEARCH] Error searching for "${query}":`, error.message);
+    console.error(`❌ [NUTRITIONIX_SEARCH] Error timestamp: ${new Date().toISOString()}`);
+    
+    if (error.response) {
+      console.error(`❌ [NUTRITIONIX_SEARCH] Status code: ${error.response.status}`);
+      console.error(`❌ [NUTRITIONIX_SEARCH] Response headers:`, error.response.headers);
+    }
+    
     // If rate limited, wait and retry
     if (error.response && error.response.status === 429) {
-      console.log('⏱️ Rate limited, waiting 2 seconds before retrying...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const retryAfter = error.response.headers['retry-after'] || 2;
+      console.log(`⏱️ [NUTRITIONIX_SEARCH] Rate limited, waiting ${retryAfter} seconds before retrying...`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
       return searchNutritionix(query);
     }
     return [];
@@ -69,7 +88,12 @@ async function searchNutritionix(query) {
  * @returns {Promise<Object>} - The best match and its information
  */
 async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
+  console.log(`\n🍳 [NUTRITIONIX_MATCH] Starting best match search for: "${foodItem || ''}"`);
+  console.log(`🍳 [NUTRITIONIX_MATCH] Start timestamp: ${new Date().toISOString()}`);
+  console.log(`🍳 [NUTRITIONIX_MATCH] Gemini fallback enabled: ${useGeminiFallback}`);
+  
   if (!foodItem || typeof foodItem !== 'string' || foodItem.trim().length < 2) {
+    console.log(`⚠️ [NUTRITIONIX_MATCH] Invalid food item: "${foodItem || ''}"`);
     return { 
       found: false, 
       originalName: foodItem || '',
@@ -79,17 +103,20 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
   }
   
   const cleanedFoodItem = foodItem.trim();
+  console.log(`🍳 [NUTRITIONIX_MATCH] Cleaned food item: "${cleanedFoodItem}"`);
   
   try {
     // Search Nutritionix
+    console.log(`🍳 [NUTRITIONIX_MATCH] Initiating Nutritionix API search...`);
     const matches = await searchNutritionix(cleanedFoodItem);
     
     if (matches.length === 0) {
-      console.log(`⚠️ No matches found for "${cleanedFoodItem}" in Nutritionix`);
+      console.log(`⚠️ [NUTRITIONIX_MATCH] No matches found for "${cleanedFoodItem}" in Nutritionix`);
       
       // Use Gemini fallback if enabled
       if (useGeminiFallback) {
-        console.log(`🤖 Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        console.log(`🤖 [NUTRITIONIX_MATCH] Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        console.log(`🤖 [NUTRITIONIX_MATCH] Gemini fallback timestamp: ${new Date().toISOString()}`);
         return await getFallbackNutrition(cleanedFoodItem);
       }
       
@@ -113,7 +140,9 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
         const foodId = match.nix_item_id || match.food_name;
         if (!foodId) return match;
         
-        console.log(`🔍 Fetching detailed nutrition data for: ${match.food_name || match.foodName}`);
+        console.log(`🔍 [NUTRITIONIX_MATCH] Fetching detailed nutrition data for: ${match.food_name || match.foodName}`);
+        console.log(`🔍 [NUTRITIONIX_MATCH] Food ID: ${foodId}`);
+        const detailStartTime = Date.now();
         const response = await axios({
           method: 'GET',
           url: 'https://trackapi.nutritionix.com/v2/search/item',
@@ -126,6 +155,7 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
             nix_item_id: foodId
           }
         });
+        console.log(`🔍 [NUTRITIONIX_MATCH] Detailed nutrition fetch time: ${Date.now() - detailStartTime}ms`);
         
         if (response.data && response.data.foods && response.data.foods.length > 0) {
           return { ...match, ...response.data.foods[0] };
@@ -164,8 +194,9 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
     let bestSimilarity = -1;
     
     // Log top matches for better debugging
-    console.log(`📊 Top matches for "${cleanedFoodItem}":`);
+    console.log(`📊 [NUTRITIONIX_MATCH] Top matches for "${cleanedFoodItem}":`);
     const topN = Math.min(matchesWithNutrition.length, 5);
+    console.log(`📊 [NUTRITIONIX_MATCH] Found ${matchesWithNutrition.length} matches with nutrition data`);
     
     for (let i = 0; i < matchesWithNutrition.length; i++) {
       const match = matchesWithNutrition[i];
@@ -195,19 +226,21 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
       console.log(`ℹ️ No match with nutrition data found, using best match: "${matchName}"`);
     }
     
-    // Use a consistent threshold for all food types
-    const similarityThreshold = 0.7;
+    // Use a higher similarity threshold to ensure better matches
+    const similarityThreshold = 0.85;
     
     // Note: We no longer use a lower threshold for Indian foods
     
     const bestMatchName = bestMatch.food_name || bestMatch.foodName || '';
-    console.log(`✅ Best match: "${bestMatchName}" (similarity: ${bestSimilarity.toFixed(3)})`); 
+    console.log(`✅ [NUTRITIONIX_MATCH] Best match: "${bestMatchName}" (similarity: ${bestSimilarity.toFixed(3)})`);
+    console.log(`🍳 [NUTRITIONIX_MATCH] Match threshold: ${similarityThreshold}, Actual similarity: ${bestSimilarity.toFixed(3)}`);
     
     // Log the complete raw nutritional data structure from Nutritionix
-    console.log(`\n📊 RAW NUTRITIONIX API DATA for "${bestMatchName}":`);      
-    console.log(`- Food ID: ${bestMatch.food_name}`);      
-    console.log(`- Serving size: ${bestMatch.serving_qty} ${bestMatch.serving_unit} (${bestMatch.serving_weight_grams}g)`);      
-    console.log(`- Calories: ${bestMatch.nf_calories} kcal`);      
+    console.log(`\n📊 [NUTRITIONIX_MATCH] RAW API DATA for "${bestMatchName}":`);
+    console.log(`- Food ID: ${bestMatch.food_name}`);
+    console.log(`- Serving size: ${bestMatch.serving_qty} ${bestMatch.serving_unit} (${bestMatch.serving_weight_grams}g)`);
+    console.log(`- Calories: ${bestMatch.nf_calories} kcal`);
+    console.log(`🍳 [NUTRITIONIX_MATCH] Nutrition data available: ${bestMatch.nf_calories ? 'Yes' : 'No'}`);
     
     // Check if data is in alt_measures or full_measures array
     if (bestMatch.alt_measures && bestMatch.alt_measures.length > 0) {
@@ -250,12 +283,14 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
     }
     
     // Log the potentially updated nutrients
-    console.log('\nFinal nutrient values:');
-    console.log(`- Protein: ${bestMatch.nf_protein || 'N/A'}g`);      
-    console.log(`- Carbohydrates: ${bestMatch.nf_total_carbohydrate || 'N/A'}g`);      
-    console.log(`- Fat: ${bestMatch.nf_total_fat || 'N/A'}g`);      
-    console.log(`- Fiber: ${bestMatch.nf_dietary_fiber || 'N/A'}g`);      
-    console.log(`- Sugars: ${bestMatch.nf_sugars || 'N/A'}g`);      
+    console.log('\n🍳 [NUTRITIONIX_MATCH] Final nutrient values:');
+    console.log(`- Protein: ${bestMatch.nf_protein || 'N/A'}g`);
+    console.log(`- Carbohydrates: ${bestMatch.nf_total_carbohydrate || 'N/A'}g`);
+    console.log(`- Fat: ${bestMatch.nf_total_fat || 'N/A'}g`);
+    console.log(`- Fiber: ${bestMatch.nf_dietary_fiber || 'N/A'}g`);
+    console.log(`- Sugars: ${bestMatch.nf_sugars || 'N/A'}g`);
+    
+    console.log(`🍳 [NUTRITIONIX_MATCH] Nutrition data extraction complete at: ${new Date().toISOString()}`);
     
     // Show raw data structure fields
     // console.log('\n📋 Available fields in the API response:');
@@ -263,6 +298,7 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
     
     // Return the match if similarity is above threshold
     if (bestSimilarity >= similarityThreshold) {
+      console.log(`✅ [NUTRITIONIX_MATCH] Match accepted: "${cleanedFoodItem}" → "${bestMatchName}"`);
       return {
         found: true,
         originalName: cleanedFoodItem,
@@ -272,11 +308,13 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
         data: bestMatch
       };
     } else {
-      console.log(`⚠️ No good match found for "${cleanedFoodItem}" (best similarity: ${bestSimilarity.toFixed(3)})`); 
+      console.log(`⚠️ [NUTRITIONIX_MATCH] No good match found for "${cleanedFoodItem}" (best similarity: ${bestSimilarity.toFixed(3)})`);
+      console.log(`⚠️ [NUTRITIONIX_MATCH] Similarity ${bestSimilarity.toFixed(3)} below threshold ${similarityThreshold}`);
       
       // Use Gemini fallback if enabled
       if (useGeminiFallback) {
-        console.log(`🤖 Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        console.log(`🤖 [NUTRITIONIX_MATCH] Trying Gemini fallback for "${cleanedFoodItem}"...`);
+        console.log(`🤖 [NUTRITIONIX_MATCH] Gemini fallback timestamp: ${new Date().toISOString()}`);
         return await getFallbackNutrition(cleanedFoodItem, similarityThreshold);
       }
       
@@ -288,15 +326,19 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
       };
     }
   } catch (error) {
-    console.error(`❌ Error finding match for "${cleanedFoodItem}":`, error.message);
+    console.error(`❌ [NUTRITIONIX_MATCH] Error finding match for "${cleanedFoodItem}":`, error.message);
+    console.error(`❌ [NUTRITIONIX_MATCH] Error timestamp: ${new Date().toISOString()}`);
+    console.error(`❌ [NUTRITIONIX_MATCH] Error stack:`, error.stack);
     
     // Use Gemini fallback if enabled and there was an error with Nutritionix
     if (useGeminiFallback) {
-      console.log(`🤖 Trying Gemini fallback due to error for "${cleanedFoodItem}"...`);
+      console.log(`🤖 [NUTRITIONIX_MATCH] Trying Gemini fallback due to error for "${cleanedFoodItem}"...`);
+      console.log(`🤖 [NUTRITIONIX_MATCH] Gemini fallback timestamp: ${new Date().toISOString()}`);
       try {
         return await getFallbackNutrition(cleanedFoodItem);
       } catch (fallbackError) {
-        console.error(`❌ Gemini fallback also failed for "${cleanedFoodItem}":`, fallbackError.message);
+        console.error(`❌ [NUTRITIONIX_MATCH] Gemini fallback also failed for "${cleanedFoodItem}":`, fallbackError.message);
+        console.error(`❌ [NUTRITIONIX_MATCH] Fallback error timestamp: ${new Date().toISOString()}`);
       }
     }
     

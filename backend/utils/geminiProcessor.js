@@ -24,13 +24,80 @@ class GeminiProcessor {
   }
 
   /**
-   * Extract text from an image using Gemini
+   * Extract text from an image buffer using Gemini
+   * @param {Buffer} imageBuffer - Image buffer
+   * @param {string} mimeType - MIME type of the image
+   * @returns {Promise<string>} - Extracted text
+   */
+  async extractTextFromImageBuffer(imageBuffer, mimeType) {
+    try {
+      console.log('🖼️ [GEMINI_PROCESSOR] Starting image buffer processing with Gemini...');
+      console.log('🖼️ [GEMINI_PROCESSOR] Processing timestamp:', new Date().toISOString());
+      
+      // Verify buffer exists and has content
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw new Error('Image buffer is empty or invalid');
+      }
+      
+      console.log(`🖼️ [GEMINI_PROCESSOR] Image buffer size: ${imageBuffer.length} bytes`);
+      console.log(`🖼️ [GEMINI_PROCESSOR] Using MIME type: ${mimeType}`);
+      console.log(`🖼️ [GEMINI_PROCESSOR] Image hash: ${Buffer.from(imageBuffer.slice(0, 100)).toString('hex').substring(0, 20)}...`); // Log partial hash for image identification
+      
+      // Simple prompt
+      const prompt = "Extract the meal timetable from this image as a CSV table with Day, Breakfast, Lunch, Dinner columns.";
+      console.log(`🖼️ [GEMINI_PROCESSOR] Using prompt: "${prompt}"`);
+      
+      // Convert to base64
+      const base64Image = imageBuffer.toString('base64');
+      console.log(`🖼️ [GEMINI_PROCESSOR] Converted image to base64 (length: ${base64Image.length} characters)`); 
+      
+      // Prepare the request
+      const imageParts = [
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Image
+          }
+        }
+      ];
+
+      console.log('🖼️ [GEMINI_PROCESSOR] Sending request to Gemini API...');
+      console.log('🖼️ [GEMINI_PROCESSOR] Request timestamp:', new Date().toISOString());
+      
+      // Use the class-level model
+      const result = await this.model.generateContent(imageParts);
+      
+      // Get response text
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('🖼️ [GEMINI_PROCESSOR] Received Gemini response at:', new Date().toISOString());
+      console.log('🖼️ [GEMINI_PROCESSOR] Response length:', text.length, 'characters');
+      console.log('🖼️ [GEMINI_PROCESSOR] Raw Gemini response (first 200 chars):', text.substring(0, 200) + '...');
+      
+      // Extract the CSV data
+      const csvData = this.extractCSVFromResponse(text);
+      console.log('🖼️ [GEMINI_PROCESSOR] Extracted CSV data:');
+      console.log(csvData);
+      console.log('🖼️ [GEMINI_PROCESSOR] CSV data length:', csvData.length, 'characters');
+      
+      return csvData;
+    } catch (error) {
+      console.error('❌ [GEMINI_PROCESSOR] Error in extractTextFromImageBuffer:', error);
+      console.error('❌ [GEMINI_PROCESSOR] Error timestamp:', new Date().toISOString());
+      throw error;
+    }
+  }
+
+  /**
+   * Extract text from an image using Gemini (legacy file path version)
    * @param {string} imagePath - Path to the image file
    * @returns {Promise<string>} - Extracted text
    */
   async extractTextFromImage(imagePath) {
     try {
-      console.log('Processing image with Gemini...');
+      console.log('Processing image with Gemini (file path method)...');
       
       // Convert to absolute path if it's not already
       const absolutePath = path.isAbsolute(imagePath) ? imagePath : path.join(process.cwd(), imagePath);
@@ -60,54 +127,8 @@ class GeminiProcessor {
       const ext = path.extname(absolutePath).toLowerCase().substring(1);
       const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
       
-      console.log(`Using MIME type: ${mimeType}`);
-      
-      // Simple prompt
-      const prompt = "Extract the meal timetable from this image as a CSV table with Day, Breakfast, Lunch, Dinner columns.";
-      
-      // Convert to base64
-      const base64Image = imageBuffer.toString('base64');
-      
-      // Prepare the request
-      const imageParts = [
-        { text: prompt },
-        {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Image
-          }
-        }
-      ];
-
-      try {
-        console.log('Sending request to Gemini API...');
-        
-        // Use the class-level model
-        const result = await this.model.generateContent(imageParts);
-        
-        // Get response text
-        const response = await result.response;
-        const text = response.text();
-        
-        console.log('Raw Gemini response:', text.substring(0, 200) + '...');
-        
-        // Extract the CSV data
-        const csvData = this.extractCSVFromResponse(text);
-        console.log('Extracted CSV data:', csvData);
-        
-        return csvData;
-      } catch (apiError) {
-        // Detailed error logging
-        console.error('Gemini API error details:');
-        console.error(JSON.stringify({
-          message: apiError.message,
-          status: apiError.status,
-          statusText: apiError.statusText,
-          stack: apiError.stack
-        }, null, 2));
-        
-        throw apiError; // Rethrow for proper error handling upstream
-      }
+      // Use the buffer-based method
+      return this.extractTextFromImageBuffer(imageBuffer, mimeType);
     } catch (error) {
       console.error('Error extracting text with Gemini:', error);
       throw error;
