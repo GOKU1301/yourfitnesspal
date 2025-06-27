@@ -192,7 +192,11 @@ app.post('/api/meals', verifyToken, isAdmin, async (req, res) => {
 });
 
 /**
- * Get next meal information
+ * Get next meal information regardless of current time
+ * 
+ * This route always returns the next meal whether it's currently meal time or time between meals
+ * If it's Sunday dinner and the next week's timetable isn't uploaded, it falls back to using
+ * Monday breakfast from the previous week as the next meal
  */
 app.get('/api/meals/next', async (req, res) => {
   const requestId = Math.random().toString(36).substring(2, 8);
@@ -212,6 +216,7 @@ app.get('/api/meals/next', async (req, res) => {
     
     // Define meal times (in minutes since midnight)
     const isWeekend = currentDayIndex === 0 || currentDayIndex === 6;
+    const breakfastStart = 7 * 60;                           // 7:00 AM
     const breakfastEnd = isWeekend ? 9.5 * 60 : 9 * 60;      // 9:30 AM on weekends, 9:00 AM on weekdays
     const lunchStart = 12 * 60;                              // 12:00 PM
     const lunchEnd = isWeekend ? 14.5 * 60 : 14 * 60;        // 2:30 PM on weekends, 2:00 PM on weekdays
@@ -221,23 +226,36 @@ app.get('/api/meals/next', async (req, res) => {
     // Determine next meal
     let nextMealType, nextMealTime, nextMealDay, nextMealDate;
     
+    // If it's before breakfast end time, next meal is lunch
     if (currentTime < breakfastEnd) {
-      nextMealType = 'breakfast';
-      nextMealTime = '7:00 AM';
-      nextMealDay = currentDay;
-      nextMealDate = now;
-    } else if (currentTime < lunchStart) {
       nextMealType = 'lunch';
       nextMealTime = '12:00 PM';
       nextMealDay = currentDay;
       nextMealDate = now;
-    } else if (currentTime < dinnerStart) {
+    } 
+    // If it's between breakfast and lunch, next meal is lunch
+    else if (currentTime < lunchStart) {
+      nextMealType = 'lunch';
+      nextMealTime = '12:00 PM';
+      nextMealDay = currentDay;
+      nextMealDate = now;
+    } 
+    // If it's lunch time, next meal is dinner
+    else if (currentTime < lunchEnd) {
       nextMealType = 'dinner';
       nextMealTime = '7:30 PM';
       nextMealDay = currentDay;
       nextMealDate = now;
-    } else {
-      // Next meal is breakfast tomorrow
+    } 
+    // If it's between lunch and dinner, next meal is dinner
+    else if (currentTime < dinnerStart) {
+      nextMealType = 'dinner';
+      nextMealTime = '7:30 PM';
+      nextMealDay = currentDay;
+      nextMealDate = now;
+    } 
+    // If it's dinner time or after, next meal is breakfast tomorrow
+    else {
       nextMealType = 'breakfast';
       nextMealTime = '7:00 AM';
       const tomorrow = new Date(now);
@@ -249,12 +267,39 @@ app.get('/api/meals/next', async (req, res) => {
     // Format date as YYYY-MM-DD for database query
     const dateString = nextMealDate.toISOString().split('T')[0];
     
-    // Find the meal in the database
-    const meal = await Meal.findOne({
-      day: nextMealDay.toLowerCase(),
-      menuStartDate: { $lte: nextMealDate },
-      menuEndDate: { $gte: nextMealDate }
-    });
+    log(`Looking for ${nextMealDay} ${nextMealType} for date ${dateString}`);
+    
+    // Find the meal in the database by day only, ignoring date constraints
+    // Get the most recent entry for the specified day
+    let meal = await Meal.findOne({
+      day: nextMealDay.toLowerCase()
+    }).sort({ menuStartDate: -1 }); // Sort by most recent menu start date
+    
+    if (meal) {
+      log(`Found meal data for ${nextMealDay}`);
+    } else {
+      log(`No meal found for ${nextMealDay}`);
+    }
+    
+    // Special case: Sunday dinner to Monday breakfast transition when next week's timetable isn't available
+    if (!meal && currentDayIndex === 0 && nextMealDay.toLowerCase() === 'monday') {
+      log('No meal plan found for next Monday. Trying to find previous week Monday breakfast as fallback.');
+      
+      // Get last week's Monday date
+      const lastMonday = new Date(nextMealDate);
+      lastMonday.setDate(lastMonday.getDate() - 7); // Go back one week
+      
+      // Try to find the previous week's Monday menu
+      meal = await Meal.findOne({
+        day: 'monday',
+        menuStartDate: { $lte: lastMonday },
+        menuEndDate: { $gte: lastMonday }
+      });
+      
+      if (meal) {
+        log('Found previous week\'s Monday menu as fallback');
+      }
+    }
     
     if (!meal) {
       log('No meal plan found for next meal');
@@ -283,7 +328,8 @@ app.get('/api/meals/next', async (req, res) => {
         mealTime: nextMealTime,
         mealDay: nextMealDay,
         mealDate: dateString,
-        items: mealItems
+        items: mealItems,
+        isFallbackData: meal.menuEndDate < now && nextMealDay.toLowerCase() === 'monday'
       }
     });
     
@@ -401,18 +447,21 @@ console.log("Devansh is saying current meal is ", mealType);
       });
     }
     
-    // Find today's meal
-    const meal = await Meal.findOne({
-      day: queryDay,
-      menuStartDate: menuPeriod.menuStartDate,
-      menuEndDate: menuPeriod.menuEndDate
-    });
+    // Find today's meal - get the most recent entry by day only, ignoring date constraints
+    let meal = await Meal.findOne({
+      day: day.toLowerCase()
+    }).sort({ menuStartDate: -1 }); // Sort by most recent menu start date
     
     log('Database query:', {
-      day: queryDay,
-      menuStartDate: menuPeriod.menuStartDate,
-      menuEndDate: menuPeriod.menuEndDate
+      day: day.toLowerCase(),
+      sort: "menuStartDate: descending"
     });
+    
+    if (meal) {
+      log(`Found meal data for ${day}`);
+    } else {
+      log(`No meal found for ${day}`);
+    }
     
     if (!meal) {
       log(`No menu found for ${queryDay} in the current menu period`);

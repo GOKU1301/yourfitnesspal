@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { FaUpload } from 'react-icons/fa';
+import BottomNav from './BottomNav';
+import TimetableModal from './TimetableModal';
 
 const Login = () => {
+  const [showTimetable, setShowTimetable] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -104,6 +107,9 @@ const Login = () => {
           </button>
         </form>
       </div>
+      {/* Timetable Modal */}
+      <TimetableModal isOpen={showTimetable} onClose={() => setShowTimetable(false)} />
+      <BottomNav onShowTimetable={() => setShowTimetable(true)} />
     </div>
   );
 };

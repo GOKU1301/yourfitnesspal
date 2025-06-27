@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import ErrorBoundary from './ErrorBoundary';
+import BottomNav from './BottomNav';
+import TimetableModal from './TimetableModal';
 import './AdminDashboard.css';
 
 // Small spinner component for buttons
@@ -31,6 +33,7 @@ ButtonSpinner.propTypes = {
 
 const AdminDashboard = () => {
   console.log('AdminDashboard component rendered');
+  const [showTimetable, setShowTimetable] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [message, setMessage] = useState({ text: '', type: '' });
@@ -344,6 +347,9 @@ const AdminDashboard = () => {
           </button>
         </div>
       </div>
+      {/* Timetable Modal */}
+      <TimetableModal isOpen={showTimetable} onClose={() => setShowTimetable(false)} />
+      <BottomNav onShowTimetable={() => setShowTimetable(true)} />
     </ErrorBoundary>
   );
 }

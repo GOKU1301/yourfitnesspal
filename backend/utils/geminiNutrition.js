@@ -31,83 +31,82 @@ class GeminiNutrition {
       // Prepare the prompt with strict formatting instructions
       const prompt = `Provide accurate nutrition information for: "${text}"
 
-      Return ONLY a JSON object matching this structure (do not include any markdown):
-      {
-        "name": "standard food name (English)",
-        "servings": [
-          {
-            "size": "side", // IMPORTANT: For non-piece foods, use ONLY "side", "center", "narrow", or "main"
-                            // For piece-based foods only, use "small", "medium", or "large"
-            "portion_label": "Portion description",
-            "diameter_cm": number | null,
-            "calories": number | null,
-            "protein": number | null,
-            "carbs": number | null,
-            "fat": number | null,
-            "fiber_g": number | null,
-            "sugar_g": number | null,
-            "volume_ml": number | null,
-            "weight_g": number | null,
-            // all these are sample values,but you must insert actual real nutrition values in place of these
-          },
-          // Include all appropriate servings
-        ],
-        "category": "Food Category"
-      }
-      
-      CRITICAL PORTION SIZE RULES - FOLLOW EXACTLY:
-      
-      1. First, determine if this is a piece-based food or a regular food:
-         - Piece-based foods: roti, chapati, paratha, naan, poori, bread, idli, vada, samosa, ladoo
-         - Beverages: milk, tea, coffee, juice, buttermilk, water
-         - Everything else: regular food (dal, sabzi, curry, rice, etc.)
+    Return ONLY a JSON object matching this structure (do not include any markdown):
+    {
+      "name": "standard food name (English)",
+      "servings": [
+        {
+          "size": "side", // For non-piece foods, use ONLY "side", "center", "narrow", or "main". For piece-based foods only, use "small", "medium", or "large".
+          "portion_label": "Portion description",
+          "diameter_cm": number | null,
+          "calories": number | null,
+          "protein": number | null,
+          "carbs": number | null,
+          "fat": number | null,
+          "fiber_g": number | null,
+          "sugar_g": number | null,
+          "volume_ml": number | null,
+          "weight_g": number | null
+        },
+        // Include all appropriate servings
+      ],
+      "category": "Food Category"
+    }
 
-      2. For piece-based foods ONLY:
-         - Use piece-based sizes: "small", "medium", "large"
-         - Small: 1 Small Piece (30g)
-         - Medium: 1 Normal Piece (60g)
-         - Large: 1 Large Piece (90g)
-         - Set volume_ml to null for piece-based foods
-         
-      3. For beverages ONLY:
-         - Small Glass (100ml), Glass (200ml), Large Glass (300ml)
-         - Set weight_g to null for beverages
-         
-      4. For ALL OTHER FOODS, you MUST use ONLY these four plate sections:
-      
-         a. Side Section (~105ml / ~100g)
-            - size: "side"
-            - portion_label: "Side Section (~105ml / ~100g)"
-      
-         b. Center Section (~135ml / ~130g)
-            - size: "center"
-            - portion_label: "Center Section (~135ml / ~130g)"
-      
-         c. Narrow Section (~115ml / ~110g)
-            - size: "narrow"
-            - portion_label: "Narrow Section (~115ml / ~110g)"
-      
-         d. Main Section (~300ml / ~290g)
-            - size: "main"
-            - portion_label: "Main Section (~300ml / ~290g)"
-      
-      GENERAL RULES:
-      1. For breads and piece-based items: provide small, medium, and large servings
-      2. For all other foods: provide ONLY the four plate section servings (side, center, narrow, main)
-      3. Use the exact plate section names and measurements specified above
-      4. Return realistic values for the nutrition
-      5. List macros in grams (g) as positive numbers
-      6. Include non-zero values for fiber and sugar when appropriate
-      7. Make sure calorie counts make sense based on macros
-      8. Always specify weight in grams (weight_g) and volume in ml (volume_ml) when available
-      9. For items normally measured by piece/count, set volume_ml to null
-      10. For liquid foods, set weight_g to null and use volume_ml
-      11. For solid foods, set volume_ml to null and use weight_g
-      12. Do not include comments in the JSON output
-      
-      Category options: bread, rice, dal, curry, chutney, salad, beverage, snack, sweet, fruit
-      
-      If you don't know, just provide your best estimate based on similar foods.`;
+    CRITICAL PORTION SIZE RULES - FOLLOW EXACTLY:
+
+    1. First, determine if this is a piece-based food or a regular food:
+       - Piece-based foods: roti, chapati, paratha, naan, poori, bread, bread omelette, gulab jamun, jalebi, kachori, sandwich (any form), coleslaw sandwich, bread omelette, poori, kachori, jalebi, all solid sweets (e.g. barfi, peda, laddu, ladoo, rasgulla, soan papdi, etc.), vada, samosa, idli, ball, cookie, biscuit, cutlet, pakora, sandwich, burger, pizza slice, bun, pav
+       - Beverages: milk, tea, coffee, juice, buttermilk, water
+       - Everything else: regular food (dal, sabzi, curry, rice, etc.)
+
+    2. For piece-based foods ONLY:
+       - Use piece-based sizes: "small", "medium", "large"
+       - For each, provide: size ("small", "medium", "large"), portion_label (e.g. "1 piece"), and weight_g (in grams)
+       - Example for roti: small = 1 piece (~30g), medium = 1 piece (~50g), large = 1 piece (~70g)
+       - For sweets, sandwiches, and other piece-based items, use realistic weights (e.g. gulab jamun: small = 1 piece (~25g), medium = 1 piece (~40g), large = 1 piece (~60g)).
+       - Always specify the weight in grams for each size. If unsure, provide your best estimate based on similar foods.
+       - Set volume_ml to null for piece-based foods.
+
+    3. For beverages ONLY:
+       - Small Glass (100ml), Glass (200ml), Large Glass (300ml)
+       - Set weight_g to null for beverages
+
+    4. For ALL OTHER FOODS, you MUST use ONLY these four plate sections:
+
+       a. Side Section (~105ml / ~100g)
+          - size: "side"
+          - portion_label: "Side Section (~105ml / ~100g)"
+
+       b. Center Section (~135ml / ~130g)
+          - size: "center"
+          - portion_label: "Center Section (~135ml / ~130g)"
+
+       c. Narrow Section (~115ml / ~110g)
+          - size: "narrow"
+          - portion_label: "Narrow Section (~115ml / ~110g)"
+
+       d. Main Section (~300ml / ~290g)
+          - size: "main"
+          - portion_label: "Main Section (~300ml / ~290g)"
+
+    GENERAL RULES:
+    1. For breads and piece-based items: provide small, medium, and large servings, each with a weight in grams.
+    2. For all other foods: provide ONLY the four plate section servings (side, center, narrow, main)
+    3. Use the exact plate section names and measurements specified above
+    4. Return realistic values for the nutrition
+    5. List macros in grams (g) as positive numbers
+    6. Include non-zero values for fiber and sugar when appropriate
+    7. Make sure calorie counts make sense based on macros
+    8. Always specify weight in grams (weight_g) and volume in ml (volume_ml) when available
+    9. For items normally measured by piece/count, set volume_ml to null
+    10. For liquid foods, set weight_g to null and use volume_ml
+    11. For solid foods, set volume_ml to null and use weight_g
+    12. Do not include comments in the JSON output
+
+    Category options: bread, rice, dal, curry, chutney, salad, beverage, snack, sweet, fruit
+
+    If you don't know, just provide your best estimate based on similar foods.`;
       
       console.log('Sending request to Gemini API...');
       const result = await this.model.generateContent({ 
@@ -169,14 +168,174 @@ class GeminiNutrition {
         const standardSizes = ['small', 'medium', 'large'];
         const plateSectionSizes = ['side', 'center', 'narrow', 'main'];
         const sizes = nutritionData.servings.map(s => s.size);
-        
+
         // Check if we have either all standard sizes OR all plate section sizes
-        const hasAllStandardSizes = standardSizes.every(size => sizes.includes(size));
-        const hasAllPlateSectionSizes = plateSectionSizes.every(size => sizes.includes(size));
-        
+        let hasAllStandardSizes = standardSizes.every(size => sizes.includes(size));
+        let hasAllPlateSectionSizes = plateSectionSizes.every(size => sizes.includes(size));
+
+        // --- AUTOFIX INCOMPLETE SERVINGS ---
         if (!hasAllStandardSizes && !hasAllPlateSectionSizes) {
-          throw new Error(`Missing required serving sizes. Need either standard sizes (${standardSizes.join(', ')}) or plate section sizes (${plateSectionSizes.join(', ')})`);
+          // Try to infer type: piece-based, beverage, or plate-section food
+          const lowerName = nutritionData.name.toLowerCase();
+          const pieceBasedFoods = [
+            'roti','chapati','paratha','naan','poori','puri','bread','bread omelette','gulab jamun','jalebi','kachori','sandwich','coleslaw sandwich','barfi','peda','laddu','ladoo','rasgulla','soan papdi','vada','samosa','idli','ball','cookie','biscuit','cutlet','pakora','burger','pizza slice','bun','pav'
+          ];
+          const beverages = ['milk','tea','coffee','juice','buttermilk','water','lassi','cold coffee'];
+          const isPiece = pieceBasedFoods.some(f => lowerName.includes(f));
+          const isBeverage = beverages.some(f => lowerName.includes(f));
+
+          // Helper for piece weights (same as in pipeline)
+          const PIECE_BASED_WEIGHTS = {
+            roti:    { small: 30, medium: 50, large: 70 },
+            paratha: { small: 50, medium: 80, large: 120 },
+            bread:   { small: 20, medium: 35, large: 50 },
+            sandwich: { small: 50, medium: 80, large: 120 },
+            'bread omelette': { small: 60, medium: 100, large: 150 },
+            poori:   { small: 15, medium: 25, large: 35 },
+            kachori: { small: 25, medium: 40, large: 60 },
+            jalebi:  { small: 20, medium: 35, large: 50 },
+            'gulab jamun': { small: 25, medium: 40, large: 60 },
+            barfi:   { small: 20, medium: 35, large: 50 },
+            peda:    { small: 20, medium: 35, large: 50 },
+            laddu:   { small: 20, medium: 35, large: 50 },
+            ladoo:   { small: 20, medium: 35, large: 50 },
+            rasgulla: { small: 30, medium: 45, large: 60 },
+            'soan papdi': { small: 20, medium: 35, large: 50 },
+            vada:    { small: 30, medium: 50, large: 70 },
+            samosa:  { small: 30, medium: 50, large: 70 },
+            idli:    { small: 25, medium: 40, large: 55 },
+            ball:    { small: 20, medium: 35, large: 50 },
+            cookie:  { small: 10, medium: 20, large: 30 },
+            biscuit: { small: 10, medium: 20, large: 30 },
+            cutlet:  { small: 30, medium: 50, large: 70 },
+            pakora:  { small: 15, medium: 25, large: 35 },
+            burger:  { small: 70, medium: 120, large: 180 },
+            'pizza slice': { small: 60, medium: 100, large: 150 },
+            bun:     { small: 30, medium: 50, large: 70 },
+            pav:     { small: 30, medium: 50, large: 70 }
+          };
+          function getPieceWeights(food, fallback) {
+            const key = Object.keys(PIECE_BASED_WEIGHTS).find(k => food.includes(k));
+            if (key) return PIECE_BASED_WEIGHTS[key];
+            return {
+              small: fallback || 30,
+              medium: (fallback || 30) * 2,
+              large: (fallback || 30) * 3
+            };
+          }
+
+          // Only one serving present, use it as base
+          const baseServing = nutritionData.servings[0];
+          // For piece-based foods
+          if (isPiece) {
+            const weights = getPieceWeights(lowerName, baseServing.weight_g);
+            const baseWeight = baseServing.weight_g || 30;
+            nutritionData.servings = [
+              {
+                size: 'small',
+                portion_label: '1 piece',
+                weight_g: weights.small,
+                volume_ml: null,
+                calories: Math.round((baseServing.calories || 0) * (weights.small / baseWeight) * 10) / 10,
+                protein: Math.round((baseServing.protein || 0) * (weights.small / baseWeight) * 10) / 10,
+                carbs: Math.round((baseServing.carbs || 0) * (weights.small / baseWeight) * 10) / 10,
+                fat: Math.round((baseServing.fat || 0) * (weights.small / baseWeight) * 10) / 10,
+                fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (weights.small / baseWeight) * 10) / 10 : null,
+                sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (weights.small / baseWeight) * 10) / 10 : null
+              },
+              {
+                size: 'medium',
+                portion_label: '1 piece',
+                weight_g: weights.medium,
+                volume_ml: null,
+                calories: Math.round((baseServing.calories || 0) * (weights.medium / baseWeight) * 10) / 10,
+                protein: Math.round((baseServing.protein || 0) * (weights.medium / baseWeight) * 10) / 10,
+                carbs: Math.round((baseServing.carbs || 0) * (weights.medium / baseWeight) * 10) / 10,
+                fat: Math.round((baseServing.fat || 0) * (weights.medium / baseWeight) * 10) / 10,
+                fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (weights.medium / baseWeight) * 10) / 10 : null,
+                sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (weights.medium / baseWeight) * 10) / 10 : null
+              },
+              {
+                size: 'large',
+                portion_label: '1 piece',
+                weight_g: weights.large,
+                volume_ml: null,
+                calories: Math.round((baseServing.calories || 0) * (weights.large / baseWeight) * 10) / 10,
+                protein: Math.round((baseServing.protein || 0) * (weights.large / baseWeight) * 10) / 10,
+                carbs: Math.round((baseServing.carbs || 0) * (weights.large / baseWeight) * 10) / 10,
+                fat: Math.round((baseServing.fat || 0) * (weights.large / baseWeight) * 10) / 10,
+                fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (weights.large / baseWeight) * 10) / 10 : null,
+                sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (weights.large / baseWeight) * 10) / 10 : null
+              }
+            ];
+            hasAllStandardSizes = true;
+          } else if (isBeverage) {
+            // For beverages: small glass (100ml), glass (200ml), large glass (300ml)
+            const baseVol = baseServing.volume_ml || 200;
+            nutritionData.servings = [
+              {
+                size: 'small',
+                portion_label: 'Small Glass (~100ml)',
+                volume_ml: 100,
+                weight_g: null,
+                calories: Math.round((baseServing.calories || 0) * (100 / baseVol) * 10) / 10,
+                protein: Math.round((baseServing.protein || 0) * (100 / baseVol) * 10) / 10,
+                carbs: Math.round((baseServing.carbs || 0) * (100 / baseVol) * 10) / 10,
+                fat: Math.round((baseServing.fat || 0) * (100 / baseVol) * 10) / 10,
+                fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (100 / baseVol) * 10) / 10 : null,
+                sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (100 / baseVol) * 10) / 10 : null
+              },
+              {
+                size: 'medium',
+                portion_label: 'Glass (~200ml)',
+                volume_ml: 200,
+                weight_g: null,
+                calories: Math.round((baseServing.calories || 0) * (200 / baseVol) * 10) / 10,
+                protein: Math.round((baseServing.protein || 0) * (200 / baseVol) * 10) / 10,
+                carbs: Math.round((baseServing.carbs || 0) * (200 / baseVol) * 10) / 10,
+                fat: Math.round((baseServing.fat || 0) * (200 / baseVol) * 10) / 10,
+                fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (200 / baseVol) * 10) / 10 : null,
+                sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (200 / baseVol) * 10) / 10 : null
+              },
+              {
+                size: 'large',
+                portion_label: 'Large Glass (~300ml)',
+                volume_ml: 300,
+                weight_g: null,
+                calories: Math.round((baseServing.calories || 0) * (300 / baseVol) * 10) / 10,
+                protein: Math.round((baseServing.protein || 0) * (300 / baseVol) * 10) / 10,
+                carbs: Math.round((baseServing.carbs || 0) * (300 / baseVol) * 10) / 10,
+                fat: Math.round((baseServing.fat || 0) * (300 / baseVol) * 10) / 10,
+                fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (300 / baseVol) * 10) / 10 : null,
+                sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (300 / baseVol) * 10) / 10 : null
+              }
+            ];
+            hasAllStandardSizes = true;
+          } else {
+            // Fallback to plate sections (side, center, narrow, main)
+            const sectionDefs = [
+              { size: 'side', portion_label: 'Side Section (~105ml / ~100g)', volume_ml: 105, weight_g: 100 },
+              { size: 'center', portion_label: 'Center Section (~135ml / ~130g)', volume_ml: 135, weight_g: 130 },
+              { size: 'narrow', portion_label: 'Narrow Section (~115ml / ~110g)', volume_ml: 115, weight_g: 110 },
+              { size: 'main', portion_label: 'Main Section (~300ml / ~290g)', volume_ml: 300, weight_g: 290 }
+            ];
+            const baseWeight = baseServing.weight_g || 290;
+            nutritionData.servings = sectionDefs.map(sec => ({
+              size: sec.size,
+              portion_label: sec.portion_label,
+              volume_ml: sec.volume_ml,
+              weight_g: sec.weight_g,
+              calories: Math.round((baseServing.calories || 0) * (sec.weight_g / baseWeight) * 10) / 10,
+              protein: Math.round((baseServing.protein || 0) * (sec.weight_g / baseWeight) * 10) / 10,
+              carbs: Math.round((baseServing.carbs || 0) * (sec.weight_g / baseWeight) * 10) / 10,
+              fat: Math.round((baseServing.fat || 0) * (sec.weight_g / baseWeight) * 10) / 10,
+              fiber_g: baseServing.fiber_g !== undefined ? Math.round((baseServing.fiber_g || 0) * (sec.weight_g / baseWeight) * 10) / 10 : null,
+              sugar_g: baseServing.sugar_g !== undefined ? Math.round((baseServing.sugar_g || 0) * (sec.weight_g / baseWeight) * 10) / 10 : null
+            }));
+            hasAllPlateSectionSizes = true;
+          }
         }
+
         
         // Add metadata
         nutritionData.source = 'gemini';

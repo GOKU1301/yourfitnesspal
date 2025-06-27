@@ -27,14 +27,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>YourFitnessPal</h1>
-        {window.location.pathname !== '/' && (
-          <button 
-            onClick={() => navigate('/')} 
-            className="btn btn-secondary"
-          >
-            Dashboard
-          </button>
-        )}
+        
       </header>
       
       <main className="app-main">

@@ -5,6 +5,7 @@ import GeminiProcessor from '../utils/geminiProcessor.js';
 import TimetableParser from '../utils/timetableParser.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
 import axios from 'axios'; // Use axios instead of fetch for Node.js
+import Meal from '../models/Meal.js'; // Import Meal model for saving timetable data
 
 const router = express.Router();
 
@@ -104,6 +105,115 @@ router.post('/upload', verifyToken, isAdmin, upload.single('timetable'), async (
     console.log(`[${new Date().toISOString()}] 🎯 FINAL RESULT: Timetable parsing complete`);
     console.log(`[${new Date().toISOString()}] 📋 PARSED TIMETABLE DATA:`);
     console.log(JSON.stringify(parsedTimetable, null, 2));
+    
+    // === SAVE TO MEALS COLLECTION ===
+    console.log(`[${new Date().toISOString()}] 🗄️ SAVING: Storing parsed timetable data to Meals collection...`);
+    console.log(`[${new Date().toISOString()}] 📋 PARSED STRUCTURE:`, typeof parsedTimetable, Object.keys(parsedTimetable));
+    
+    try {
+      // Get the current date and parse the menu date range from the timetable
+      // For this example, we'll use current date for the menu period (adjust as needed)
+      const now = new Date();
+      console.log(`[${new Date().toISOString()}] 🕒 CURRENT TIME:`, now.toISOString());
+      
+      // Set menu start date to the beginning of the current week (Sunday)
+      const menuStartDate = new Date(now);
+      menuStartDate.setDate(now.getDate() - now.getDay());
+      menuStartDate.setHours(0, 0, 0, 0);
+      
+      // Set menu end date to the end of next week (Saturday)
+      const menuEndDate = new Date(menuStartDate);
+      menuEndDate.setDate(menuStartDate.getDate() + 13); // Two weeks
+      menuEndDate.setHours(23, 59, 59, 999);
+      
+      console.log(`[${new Date().toISOString()}] 📅 MENU PERIOD: ${menuStartDate.toISOString()} to ${menuEndDate.toISOString()}`);
+      
+      // Delete any existing meals for this menu period to avoid duplicates
+      const deleteResult = await Meal.deleteMany({
+        menuStartDate: { $gte: menuStartDate },
+        menuEndDate: { $lte: menuEndDate }
+      });
+      console.log(`[${new Date().toISOString()}] 🗑️ DELETED MEALS:`, deleteResult);
+      
+      // Create meal entries for each day in the parsed timetable
+      const mealSavePromises = [];
+      
+      console.log(`[${new Date().toISOString()}] 🔄 STARTING MEAL SAVE PROCESS`);
+      
+      // Format for proper case day names
+      const formatDayName = (day) => {
+        return day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+      };
+      
+      // Convert to proper format if needed
+      let formattedParsedTimetable = parsedTimetable;
+      if (Object.keys(parsedTimetable).length === 0) {
+        console.log(`[${new Date().toISOString()}] ⚠️ WARNING: Empty parsedTimetable object`);
+      } else {
+        // Debug the structure
+        console.log(`[${new Date().toISOString()}] 🔍 PARSED DAYS:`, Object.keys(parsedTimetable));
+        console.log(`[${new Date().toISOString()}] 🔍 SAMPLE DAY:`, JSON.stringify(parsedTimetable[Object.keys(parsedTimetable)[0]], null, 2));
+      }
+      
+      for (let [day, meals] of Object.entries(parsedTimetable)) {
+        // Format day name to ensure proper case (Monday, not monday or MONDAY)
+        day = formatDayName(day);
+        
+        console.log(`[${new Date().toISOString()}] 📝 PROCESSING DAY: ${day}`);
+        console.log(`[${new Date().toISOString()}] 📝 MEALS DATA:`, JSON.stringify(meals, null, 2));
+        
+        // Calculate the date for this day of the week
+        const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayIndex = dayOfWeek.indexOf(day);
+        
+        if (dayIndex === -1) {
+          console.log(`[${new Date().toISOString()}] ⚠️ WARNING: Skipping unknown day: ${day}`);
+          continue;
+        }
+        
+        // Calculate the date for this day
+        const dayDate = new Date(menuStartDate);
+        dayDate.setDate(menuStartDate.getDate() + dayIndex);
+        
+        // Ensure meals has the correct structure
+        const formattedMeals = {
+          breakfast: Array.isArray(meals.breakfast) ? meals.breakfast : [],
+          lunch: Array.isArray(meals.lunch) ? meals.lunch : [],
+          dinner: Array.isArray(meals.dinner) ? meals.dinner : []
+        };
+        
+        if (!formattedMeals.breakfast.length && 
+            !formattedMeals.lunch.length && 
+            !formattedMeals.dinner.length) {
+          console.log(`[${new Date().toISOString()}] ⚠️ WARNING: No meal data for ${day}, skipping`);  
+          continue;
+        }
+        
+        // Create a new meal document
+        const mealData = {
+          menuStartDate,
+          menuEndDate,
+          day,
+          dayDate,
+          meals: formattedMeals
+        };
+        
+        console.log(`[${new Date().toISOString()}] 📋 MEAL DOCUMENT:`, JSON.stringify(mealData, null, 2));
+        
+        try {
+          // Create and save the meal document directly without promises
+          const meal = new Meal(mealData);
+          const savedMeal = await meal.save();
+          console.log(`[${new Date().toISOString()}] ✅ SAVED MEAL for ${day} with ID: ${savedMeal._id}`);
+        } catch (saveError) {
+          console.error(`[${new Date().toISOString()}] ❌ ERROR SAVING MEAL for ${day}:`, saveError.message);
+        }
+      }
+      
+      console.log(`[${new Date().toISOString()}] ✅ MEALS SAVED: Successfully saved parsed timetable to Meals collection`);
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] ❌ ERROR SAVING MEALS: ${error.message}`);
+    }
 
     // === NUTRITION EXTRACTION ===
     // Extract food items from parsedTimetable (flatten all meal/section arrays)

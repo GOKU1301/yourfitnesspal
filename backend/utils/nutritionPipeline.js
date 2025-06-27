@@ -77,11 +77,58 @@ async function processAndStoreNutrition(foodItems = []) {
         const base = nutritionixResult.nutrition;
         
         // Check if this is a piece-based food (like sweets) that should use piece-based scaling
-        const isPieceBasedFood = base.serving_unit && typeof base.serving_unit === 'string' && ['piece', 'pieces', 'ball', 'balls', 'cookie', 'cookies'].includes(base.serving_unit.toLowerCase());
+        // Expanded piece-based food detection
+        const PIECE_BASED_FOODS = [
+          'roti','roti','chapati','paratha','naan','poori','puri','bread','bread omelette','gulab jamun','jalebi','kachori','sandwich','coleslaw sandwich','bread omelette','poori','kachori','jalebi','barfi','peda','laddu','ladoo','rasgulla','soan papdi','vada','samosa','idli','ball','cookie','biscuit','cutlet','pakora','burger','pizza slice','bun','pav'
+        ];
+        const isPieceBasedFood = PIECE_BASED_FOODS.some(f => item.toLowerCase().includes(f)) || (base.serving_unit && typeof base.serving_unit === 'string' && ['piece', 'pieces', 'ball', 'balls', 'cookie', 'cookies'].includes(base.serving_unit.toLowerCase()));
+
+        // Helper for realistic weights for piece-based foods
+        const PIECE_BASED_WEIGHTS = {
+          roti:    { small: 30, medium: 50, large: 70 },
+          paratha: { small: 50, medium: 80, large: 120 },
+          bread:   { small: 20, medium: 35, large: 50 },
+          sandwich: { small: 50, medium: 80, large: 120 },
+          'bread omelette': { small: 60, medium: 100, large: 150 },
+          poori:   { small: 15, medium: 25, large: 35 },
+          kachori: { small: 25, medium: 40, large: 60 },
+          jalebi:  { small: 20, medium: 35, large: 50 },
+          'gulab jamun': { small: 25, medium: 40, large: 60 },
+          barfi:   { small: 20, medium: 35, large: 50 },
+          peda:    { small: 20, medium: 35, large: 50 },
+          laddu:   { small: 20, medium: 35, large: 50 },
+          ladoo:   { small: 20, medium: 35, large: 50 },
+          rasgulla: { small: 30, medium: 45, large: 60 },
+          'soan papdi': { small: 20, medium: 35, large: 50 },
+          vada:    { small: 30, medium: 50, large: 70 },
+          samosa:  { small: 30, medium: 50, large: 70 },
+          idli:    { small: 25, medium: 40, large: 55 },
+          ball:    { small: 20, medium: 35, large: 50 },
+          cookie:  { small: 10, medium: 20, large: 30 },
+          biscuit: { small: 10, medium: 20, large: 30 },
+          cutlet:  { small: 30, medium: 50, large: 70 },
+          pakora:  { small: 15, medium: 25, large: 35 },
+          burger:  { small: 70, medium: 120, large: 180 },
+          'pizza slice': { small: 60, medium: 100, large: 150 },
+          bun:     { small: 30, medium: 50, large: 70 },
+          pav:     { small: 30, medium: 50, large: 70 }
+        };
+        // Try to get mapped weights, fallback to base serving_size_g
+        function getPieceWeights(food) {
+          const key = Object.keys(PIECE_BASED_WEIGHTS).find(k => food.toLowerCase().includes(k));
+          if (key) return PIECE_BASED_WEIGHTS[key];
+          return {
+            small: base.serving_size_g || 30,
+            medium: (base.serving_size_g || 30) * 2,
+            large: (base.serving_size_g || 30) * 3
+          };
+        }
+
         
         if (isPieceBasedFood) {
           console.log(`[NutritionPipeline] Detected "${item}" as a PIECE-BASED food item with serving unit: ${base.serving_unit}`);
           // For piece-based foods, create servings based on piece counts
+          const pieceWeights = getPieceWeights(item);
           nutritionData = {
             name: item,
             aliases: [],
@@ -90,14 +137,14 @@ async function processAndStoreNutrition(foodItems = []) {
               {
                 size: 'small',
                 portion_label: `1 piece`,
-                weight_g: base.serving_size_g,
+                weight_g: pieceWeights.small,
                 volume_ml: null,
-                calories: base.calories,
-                protein: base.protein_g,
-                carbs: base.carbohydrates_total_g,
-                fat: base.fat_total_g,
-                fiber: base.fiber_g,
-                sugar: base.sugar_g,
+                calories: Math.round(base.calories * (pieceWeights.small / base.serving_size_g) * 10) / 10,
+                protein: Math.round(base.protein_g * (pieceWeights.small / base.serving_size_g) * 10) / 10,
+                carbs: Math.round(base.carbohydrates_total_g * (pieceWeights.small / base.serving_size_g) * 10) / 10,
+                fat: Math.round(base.fat_total_g * (pieceWeights.small / base.serving_size_g) * 10) / 10,
+                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * (pieceWeights.small / base.serving_size_g) * 10) / 10 : undefined,
+                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * (pieceWeights.small / base.serving_size_g) * 10) / 10 : undefined,
                 _source: 'nutritionix',
                 _originalServingSize: base.serving_size_g,
                 _originalCalories: base.calories,
@@ -105,15 +152,15 @@ async function processAndStoreNutrition(foodItems = []) {
               },
               {
                 size: 'medium',
-                portion_label: `2 pieces`,
-                weight_g: base.serving_size_g * 2,
+                portion_label: `1 piece`,
+                weight_g: pieceWeights.medium,
                 volume_ml: null,
-                calories: Math.round(base.calories * 2 * 10) / 10,
-                protein: Math.round(base.protein_g * 2 * 10) / 10,
-                carbs: Math.round(base.carbohydrates_total_g * 2 * 10) / 10,
-                fat: Math.round(base.fat_total_g * 2 * 10) / 10,
-                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * 2 * 10) / 10 : undefined,
-                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * 2 * 10) / 10 : undefined,
+                calories: Math.round(base.calories * (pieceWeights.medium / base.serving_size_g) * 10) / 10,
+                protein: Math.round(base.protein_g * (pieceWeights.medium / base.serving_size_g) * 10) / 10,
+                carbs: Math.round(base.carbohydrates_total_g * (pieceWeights.medium / base.serving_size_g) * 10) / 10,
+                fat: Math.round(base.fat_total_g * (pieceWeights.medium / base.serving_size_g) * 10) / 10,
+                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * (pieceWeights.medium / base.serving_size_g) * 10) / 10 : undefined,
+                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * (pieceWeights.medium / base.serving_size_g) * 10) / 10 : undefined,
                 _source: 'nutritionix',
                 _originalServingSize: base.serving_size_g,
                 _originalCalories: base.calories,
@@ -121,15 +168,15 @@ async function processAndStoreNutrition(foodItems = []) {
               },
               {
                 size: 'large',
-                portion_label: `3 pieces`,
-                weight_g: base.serving_size_g * 3,
+                portion_label: `1 piece`,
+                weight_g: pieceWeights.large,
                 volume_ml: null,
-                calories: Math.round(base.calories * 3 * 10) / 10,
-                protein: Math.round(base.protein_g * 3 * 10) / 10,
-                carbs: Math.round(base.carbohydrates_total_g * 3 * 10) / 10,
-                fat: Math.round(base.fat_total_g * 3 * 10) / 10,
-                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * 3 * 10) / 10 : undefined,
-                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * 3 * 10) / 10 : undefined,
+                calories: Math.round(base.calories * (pieceWeights.large / base.serving_size_g) * 10) / 10,
+                protein: Math.round(base.protein_g * (pieceWeights.large / base.serving_size_g) * 10) / 10,
+                carbs: Math.round(base.carbohydrates_total_g * (pieceWeights.large / base.serving_size_g) * 10) / 10,
+                fat: Math.round(base.fat_total_g * (pieceWeights.large / base.serving_size_g) * 10) / 10,
+                fiber: base.fiber_g !== undefined ? Math.round(base.fiber_g * (pieceWeights.large / base.serving_size_g) * 10) / 10 : undefined,
+                sugar: base.sugar_g !== undefined ? Math.round(base.sugar_g * (pieceWeights.large / base.serving_size_g) * 10) / 10 : undefined,
                 _source: 'nutritionix',
                 _originalServingSize: base.serving_size_g,
                 _originalCalories: base.calories,
@@ -137,6 +184,7 @@ async function processAndStoreNutrition(foodItems = []) {
               }
             ]
           };
+
         } else {
           // Map Nutritionix data to plate section servings using final user estimates
           const PLATE_SECTIONS = [
