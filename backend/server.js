@@ -10,6 +10,7 @@ import { findBestNutritionixMatch } from './utils/nutritionixSearch.js';
 import { addFoodMapping } from './utils/foodMapping.js';
 import { processAndStoreNutrition } from './utils/nutritionPipeline.js';
 import TimetableParser from './utils/timetableParser.js';
+import moment from 'moment-timezone';
 
 import { verifyToken, isAdmin } from './middleware/auth.js';
 import mongoose from 'mongoose';
@@ -354,18 +355,19 @@ app.get('/api/meals/current', async (req, res) => {
   // log('Headers:', JSON.stringify(req.headers, null, 2));
   
   try {
-    const now = new Date();
-    const day = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
+    // Use IST timezone for consistent behavior in local and deployed environments
+    const now = moment().tz('Asia/Kolkata');
+    const day = now.format('dddd').toLowerCase(); // 'sunday', 'monday', etc.
+    const hours = now.hours();
+    const minutes = now.minutes();
     
     // Calculate current time in minutes since midnight
     const currentTime = hours * 60 + minutes;
     
-    log(`Current time: ${now.toISOString()}, Day: ${day}, Time: ${hours}:${minutes}`);
+    log(`Current time (IST): ${now.format()}, Day: ${day}, Time: ${hours}:${minutes}`);
     
     // Define meal times (in minutes since midnight)
-    const isSunday = now.getDay() === 0;
+    const isSunday = day === 'sunday'; // Use the day string directly instead of getDay()
     const breakfastStart = 7 * 60; // 7:00 AM for all days
     const breakfastEnd = isSunday ? 9.5 * 60 : 9 * 60;      // 9:30 AM Sunday, 9:00 AM Mon-Sat
     const lunchStart = 12 * 60;                             // 12:00 PM all days
@@ -456,9 +458,8 @@ app.get('/api/meals/current', async (req, res) => {
 
     // --- End enhanced logic ---
 
-    // Find the most recent menu that includes today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Find the most recent menu that includes today (in IST)
+    const today = moment().tz('Asia/Kolkata').startOf('day').toDate();
     
     const queryDay = day.charAt(0).toUpperCase() + day.slice(1);
     log(`Querying database for menu on ${queryDay}...`);
@@ -531,8 +532,17 @@ app.get('/api/meals/current', async (req, res) => {
       // Query for the next day's meal document
       const nextDayQuery = nextMealDay.charAt(0).toUpperCase() + nextMealDay.slice(1);
       nextMealDoc = await Meal.findOne({ day: nextDayQuery }).sort({ menuStartDate: -1 });
+      log(`Looking for next day meal: ${nextDayQuery}, found: ${nextMealDoc ? 'yes' : 'no'}`);
     }
-    const nextMealItems = (nextMealDoc && nextMealDoc.meals && nextMealDoc.meals[nextMealType]) ? nextMealDoc.meals[nextMealType] : [];
+    
+    // Handle case where next day's meal document isn't found
+    let nextMealItems = [];
+    if (nextMealDoc && nextMealDoc.meals && nextMealDoc.meals[nextMealType]) {
+      nextMealItems = nextMealDoc.meals[nextMealType];
+      log(`Found ${nextMealItems.length} items for next meal (${nextMealType}) on ${nextMealDay}`);
+    } else {
+      log(`No menu items found for ${nextMealType} on ${nextMealDay}`);
+    }
 
     // --- Prepare response ---
     const response = {
