@@ -30,6 +30,22 @@ const NutritionPage = () => {
     // Create and inject styles for mobile responsiveness
     const style = document.createElement('style');
     style.textContent = `
+      /* Goku image responsive styling */
+      .goku-image {
+        max-width: 900px;
+        width: 98vw;
+        height: auto;
+        min-height: 300px;
+        max-height: 80vh;
+        display: block;
+        margin: 0 auto;
+        border-radius: 18px;
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+        object-fit: contain;
+        background: #181a20;
+        padding: 12px;
+      }
+      
       @media (max-width: 768px) {
         .tab-buttons, .meal-container {
           width: 95% !important;
@@ -55,6 +71,14 @@ const NutritionPage = () => {
         h2 {
           font-size: 1.5rem !important;
         }
+        /* Goku image mobile adjustments */
+        .goku-image {
+          max-width: 100%;
+          width: 95vw;
+          min-height: 200px;
+          max-height: 60vh;
+          padding: 8px;
+        }
       }
       
       @media (max-width: 480px) {
@@ -73,6 +97,12 @@ const NutritionPage = () => {
         }
         .nutrition-cards {
           grid-template-columns: 1fr !important;
+        }
+        /* Goku image small mobile adjustments */
+        .goku-image {
+          min-height: 150px;
+          max-height: 50vh;
+          padding: 6px;
         }
       }
       
@@ -992,20 +1022,7 @@ const NutritionPage = () => {
                      <img 
                       src="/images/goku.png" 
                       alt="Goku" 
-                      style={{
-                        maxWidth: '900px', // Further increased max width
-                        width: '98vw',     // Nearly full viewport width
-                        height: 'auto',    // Maintain aspect ratio
-                        minHeight: '300px', // Larger minimum height
-                        maxHeight: '80vh', // Allow more vertical space
-                        display: 'block',
-                        margin: '0 auto',
-                        borderRadius: '18px',
-                        boxShadow: '0 10px 32px rgba(0, 0, 0, 0.18)',
-                        objectFit: 'contain',
-                        background: '#181a20',
-                        padding: '12px'
-                      }} 
+                      className="goku-image"
                     />
                     {/* {nextMeal && nextMeal.type && nextMeal.mealTime && (
                       <div style={{

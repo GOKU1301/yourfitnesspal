@@ -898,6 +898,9 @@ app.get('/api/meals', async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+// Listen on all network interfaces for mobile access
+const HOST = '0.0.0.0';
+
 async function startServer() {
   try {
     // Connect to MongoDB
@@ -934,9 +937,9 @@ async function startServer() {
     });
     
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('Error starting server:', error);
     process.exit(1);
   }
 }
 
-startServer().catch(console.error);
+startServer();
