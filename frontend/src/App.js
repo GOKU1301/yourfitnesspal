@@ -26,7 +26,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>YourFitnessPal</h1>
+        <h1>jiitNutrition</h1>
         
       </header>
       
@@ -46,7 +46,7 @@ function App() {
       </main>
       
       <footer className="app-footer">
-        <p>&copy; {new Date().getFullYear()} YourFitnessPal. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} jiitNutrition. All rights reserved.</p>
       </footer>
     </div>
   );

@@ -358,71 +358,104 @@ app.get('/api/meals/current', async (req, res) => {
     const day = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
     const hours = now.getHours();
     const minutes = now.getMinutes();
+    
+    // Calculate current time in minutes since midnight
     const currentTime = hours * 60 + minutes;
     
     log(`Current time: ${now.toISOString()}, Day: ${day}, Time: ${hours}:${minutes}`);
     
     // Define meal times (in minutes since midnight)
-    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-    const breakfastEnd = isWeekend ? 9.5 * 60 : 9 * 60;      // 9:30 AM on weekends, 9:00 AM on weekdays
-    const lunchStart = 12 * 60;                              // 12:00 PM
-    const lunchEnd = isWeekend ? 14.5 * 60 : 14 * 60;        // 2:30 PM on weekends, 2:00 PM on weekdays
-    const dinnerStart = 19.5 * 60;                           // 7:30 PM
-    const dinnerEnd = 21.5 * 60;                             // 9:30 PM
+    const isSunday = now.getDay() === 0;
+    const breakfastStart = 7 * 60; // 7:00 AM for all days
+    const breakfastEnd = isSunday ? 9.5 * 60 : 9 * 60;      // 9:30 AM Sunday, 9:00 AM Mon-Sat
+    const lunchStart = 12 * 60;                             // 12:00 PM all days
+    const lunchEnd = isSunday ? 14.5 * 60 : 14 * 60;        // 2:30 PM Sunday, 2:00 PM Mon-Sat
+    const dinnerStart = 19.5 * 60;                          // 7:30 PM all days
+    const dinnerEnd = 21.5 * 60;                            // 9:30 PM all days
+    
+    // Format times for logging
+    const formatTime = (mins) => `${Math.floor(mins/60)}:${mins%60 < 10 ? '0' + mins%60 : mins%60}`;
     
     log('Meal times:', JSON.stringify({
-      isWeekend,
-      breakfastEnd: `${breakfastEnd/60}:${breakfastEnd%60}`,
-      lunchStart: `${lunchStart/60}:${lunchStart%60}`,
-      lunchEnd: `${lunchEnd/60}:${lunchEnd%60}`,
-      dinnerStart: `${dinnerStart/60}:${dinnerStart%60}`,
-      dinnerEnd: `${dinnerEnd/60}:${dinnerEnd%60}`,
-      currentTime: `${Math.floor(currentTime/60)}:${currentTime%60}`
+      isSunday,
+      breakfastStart: formatTime(breakfastStart),
+      breakfastEnd: formatTime(breakfastEnd),
+      lunchStart: formatTime(lunchStart),
+      lunchEnd: formatTime(lunchEnd),
+      dinnerStart: formatTime(dinnerStart),
+      dinnerEnd: formatTime(dinnerEnd),
+      currentTime: formatTime(currentTime)
     }, null, 2));
     
-    let mealType, nextMeal, nextMealTime;
-    
-      // Determine current meal type and next meal
-      log('Determining meal type...');
-      if (currentTime < breakfastEnd) {
-        mealType = 'breakfast';
-        nextMeal = 'lunch';
-        nextMealTime = '12:00';
-        log('Meal determined: Breakfast (current)');
-      } else if (currentTime < lunchStart) {
-        mealType = 'lunch';
-        nextMeal = 'lunch';
-        nextMealTime = '12:00';
-        log('No current meal. Next meal: Lunch at 12:00');
-      } else if (currentTime < lunchEnd) {
-        mealType = 'lunch';
-        nextMeal = 'dinner';
-        nextMealTime = '19:30';
-        log('Meal determined: Lunch (current)');
-      } else if (currentTime < dinnerStart) {
-        mealType = 'dinner';
-        nextMeal = 'dinner';
-        nextMealTime = '19:30';
-        log('No current meal. Next meal: Dinner at 19:30');
-      } else if (currentTime < dinnerEnd) {
-        mealType = 'dinner';
-        nextMeal = 'breakfast';
-        nextMealTime = '07:00';
-        log('Meal determined: Dinner (current)');
-      } else {
-        mealType = 'breakfast';
-        nextMeal = 'breakfast';
-        nextMealTime = '07:00';
-        log('No current meal. Next meal: Breakfast at 07:00');
-      }
-      
-      // Log the final meal type and next meal info
-      // Log the final meal type and next meal info
-log(`Final meal type: ${mealType}`);
-log(`Next meal: ${nextMeal} at ${nextMealTime}`);
-log(`Current time: ${hours}:${minutes < 10 ? '0' + minutes : minutes}`);
-log(`Current time in minutes: ${currentTime}`);
-console.log("Devansh is saying current meal is ", mealType);
+    // --- Enhanced logic for next meal and next day rollover ---
+    const mealOrder = ['breakfast', 'lunch', 'dinner'];
+    let mealType = null;
+    let nextMealType = null;
+    let nextMealTime = null;
+    let nextMealDay = day;
+
+    log('Determining meal type...');
+    if (currentTime >= breakfastStart && currentTime < breakfastEnd) {
+      mealType = 'breakfast';
+      nextMealType = 'lunch';
+      nextMealTime = '12:00';
+      nextMealDay = day;
+      log('Meal determined: Breakfast (current)');
+    } else if (currentTime >= lunchStart && currentTime < lunchEnd) {
+      mealType = 'lunch';
+      nextMealType = 'dinner';
+      nextMealTime = '19:30';
+      nextMealDay = day;
+      log('Meal determined: Lunch (current)');
+    } else if (currentTime >= dinnerStart && currentTime < dinnerEnd) {
+      mealType = 'dinner';
+      nextMealType = 'breakfast';
+      nextMealTime = '07:00'; // breakfast always starts at 7:00 AM
+      // Next meal is on the next day
+      const daysOfWeek = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const todayIdx = daysOfWeek.indexOf(day.toLowerCase());
+      nextMealDay = daysOfWeek[(todayIdx + 1) % 7];
+      log('Meal determined: Dinner (current)');
+    } else if (currentTime < breakfastStart) {
+      // Before breakfast
+      mealType = null;
+      nextMealType = 'breakfast';
+      nextMealTime = '07:00';
+      nextMealDay = day;
+      log('No current meal. Next meal: Breakfast at 07:00');
+    } else if (currentTime >= breakfastEnd && currentTime < lunchStart) {
+      // Between breakfast and lunch
+      mealType = null;
+      nextMealType = 'lunch';
+      nextMealTime = '12:00';
+      nextMealDay = day;
+      log('No current meal. Next meal: Lunch at 12:00');
+    } else if (currentTime >= lunchEnd && currentTime < dinnerStart) {
+      // Between lunch and dinner
+      mealType = null;
+      nextMealType = 'dinner';
+      nextMealTime = '19:30';
+      nextMealDay = day;
+      log('No current meal. Next meal: Dinner at 19:30');
+    } else {
+      // After dinner time, next meal is tomorrow's breakfast
+      mealType = null;
+      nextMealType = 'breakfast';
+      nextMealTime = '07:00';
+      const daysOfWeek = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const todayIdx = daysOfWeek.indexOf(day.toLowerCase());
+      nextMealDay = daysOfWeek[(todayIdx + 1) % 7];
+      log('No current meal. Next meal: Breakfast at 07:00 (next day)');
+    }
+
+    log(`Final meal type: ${mealType}`);
+    log(`Next meal: ${nextMealType} at ${nextMealTime} on ${nextMealDay}`);
+    log(`Current time: ${hours}:${minutes < 10 ? '0' + minutes : minutes}`);
+    log(`Current time in minutes: ${currentTime}`);
+    console.log("Devansh is saying current meal is ", mealType);
+
+    // --- End enhanced logic ---
+
     // Find the most recent menu that includes today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -438,20 +471,27 @@ console.log("Devansh is saying current meal is ", mealType);
     
     if (!menuPeriod) {
       log('No active menu period found');
-      return res.status(404).json({
+      const response = {
         status: 'success',
         data: {
           currentMeal: null,
           message: 'No active menu period found'
         }
-      });
+      };
+      console.log('[api/meals/current] Response:', JSON.stringify(response, null, 2));
+      return res.status(404).json(response);
     }
     
-    // Find today's meal - get the most recent entry by day only, ignoring date constraints
-    let meal = await Meal.findOne({
-      day: day.toLowerCase()
-    }).sort({ menuStartDate: -1 }); // Sort by most recent menu start date
+    console.log('Looking for meals with day:', queryDay);
+    console.log('Current date:', today);
     
+    // Find today's meal - get the most recent entry by day only
+    // Using queryDay (properly capitalized) instead of day
+    // And NOT filtering by menuPeriod dates to ensure we find something
+    let meal = await Meal.findOne({
+      day: queryDay  // Use the correctly capitalized day name that matches the enum
+    }).sort({ menuStartDate: -1 }); // Sort by most recent menu start date
+    console.log('[api/meals/current] Raw DB meal result:', JSON.stringify(meal, null, 2));
     log('Database query:', {
       day: day.toLowerCase(),
       sort: "menuStartDate: descending"
@@ -465,13 +505,15 @@ console.log("Devansh is saying current meal is ", mealType);
     
     if (!meal) {
       log(`No menu found for ${queryDay} in the current menu period`);
-      return res.status(404).json({
+      const response = {
         status: 'success',
         data: {
           currentMeal: null,
           message: `No menu found for ${queryDay}`
         }
-      });
+      };
+      console.log('[api/meals/current] Response:', JSON.stringify(response, null, 2));
+      return res.status(404).json(response);
     }
     
     log(`Found menu with ${meal.meals ? Object.keys(meal.meals).length : 0} meal types`);
@@ -483,8 +525,16 @@ console.log("Devansh is saying current meal is ", mealType);
       });
     }
     
-    // Prepare response
-    
+    // --- Prepare next meal document and items ---
+    let nextMealDoc = meal;
+    if (nextMealDay !== day) {
+      // Query for the next day's meal document
+      const nextDayQuery = nextMealDay.charAt(0).toUpperCase() + nextMealDay.slice(1);
+      nextMealDoc = await Meal.findOne({ day: nextDayQuery }).sort({ menuStartDate: -1 });
+    }
+    const nextMealItems = (nextMealDoc && nextMealDoc.meals && nextMealDoc.meals[nextMealType]) ? nextMealDoc.meals[nextMealType] : [];
+
+    // --- Prepare response ---
     const response = {
       status: 'success',
       data: {
@@ -493,8 +543,10 @@ console.log("Devansh is saying current meal is ", mealType);
           items: meal.meals[mealType] || []
         } : null,
         nextMeal: {
-          type: nextMeal,
-          time: nextMealTime
+          type: nextMealType,
+          time: nextMealTime,
+          day: nextMealDay,
+          items: nextMealItems
         },
         day: day,
         currentTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
@@ -502,14 +554,17 @@ console.log("Devansh is saying current meal is ", mealType);
     };
     
     log('Sending response:', JSON.stringify(response, null, 2));
+    console.log('[api/meals/current] Response:', JSON.stringify(response, null, 2));
     return res.json(response);
   } catch (error) {
     console.error('Error fetching current meal:', error);
-    return res.status(500).json({
+    const response = {
       status: 'error',
       message: 'Failed to fetch current meal',
       error: error.message
-    });
+    };
+    console.log('[api/meals/current] Response:', JSON.stringify(response, null, 2));
+    return res.status(500).json(response);
   }
 });
 

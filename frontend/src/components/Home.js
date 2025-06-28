@@ -31,8 +31,8 @@ const Home = () => {
           src={process.env.PUBLIC_URL + '/images/jiitnoida.webp'}
           alt="JIIT Noida"
           style={{
-            width: '100vw',
-            height: '100vh',
+            width: '70vw',
+            height: '70vh',
             objectFit: 'cover',
             border: 'none',
             background: 'none',
