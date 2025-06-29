@@ -883,7 +883,7 @@ const NutritionPage = () => {
                     }}>
                       <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>CALORIES</span>
                       <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                        <span style={{ color: '#3182ce', fontWeight: '700', fontSize: '24px' }}>{totalNutrition.calories}</span>
+                        <span style={{ color: '#3182ce', fontWeight: '700', fontSize: '24px' }}>{totalNutrition ? totalNutrition.calories : 0}</span>
                         <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}> kcal</span>
                       </div>
                     </div>
@@ -897,7 +897,7 @@ const NutritionPage = () => {
                 }}>
                   <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>PROTEIN</span>
                   <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                    <span style={{ color: '#3182ce', fontWeight: '700', fontSize: '24px' }}>{totalNutrition.protein}</span>
+                    <span style={{ color: '#3182ce', fontWeight: '700', fontSize: '24px' }}>{totalNutrition ? totalNutrition.protein : 0}</span>
                     <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
                   </div>
                 </div>
@@ -910,7 +910,7 @@ const NutritionPage = () => {
                           }}>
                             <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>CARBS</span>
                   <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                    <span style={{ color: '#ed8936', fontWeight: '700', fontSize: '24px' }}>{totalNutrition.carbs}</span>
+                    <span style={{ color: '#ed8936', fontWeight: '700', fontSize: '24px' }}>{totalNutrition ? totalNutrition.carbs : 0}</span>
                     <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
                   </div>
                 </div>
@@ -923,7 +923,7 @@ const NutritionPage = () => {
                           }}>
                             <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>FAT</span>
                   <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                    <span style={{ color: '#9f7aea', fontWeight: '700', fontSize: '24px' }}>{totalNutrition.fat}</span>
+                    <span style={{ color: '#9f7aea', fontWeight: '700', fontSize: '24px' }}>{totalNutrition ? totalNutrition.fat : 0}</span>
                     <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
                   </div>
                 </div>
@@ -936,7 +936,7 @@ const NutritionPage = () => {
                           }}>
                             <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>FIBER</span>
                   <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                    <span style={{ color: '#48bb78', fontWeight: '700', fontSize: '24px' }}>{totalNutrition.fiber}</span>
+                    <span style={{ color: '#48bb78', fontWeight: '700', fontSize: '24px' }}>{totalNutrition ? totalNutrition.fiber : 0}</span>
                     <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
                   </div>
                 </div>
@@ -949,7 +949,7 @@ const NutritionPage = () => {
                           }}>
                             <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>SUGAR</span>
                   <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                    <span style={{ color: '#ecc94b', fontWeight: '700', fontSize: '24px' }}>{totalNutrition.sugar}</span>
+                    <span style={{ color: '#ecc94b', fontWeight: '700', fontSize: '24px' }}>{totalNutrition ? totalNutrition.sugar : 0}</span>
                     <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
                   </div>
                 </div>
