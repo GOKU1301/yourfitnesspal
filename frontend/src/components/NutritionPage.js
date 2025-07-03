@@ -27,14 +27,6 @@ const NutritionPage = () => {
 
   // Add responsive styles
   useEffect(() => {
-    // Fetch nutrition data for next meal when toggle is ON and Next Meal tab is active
-    if (activeTab === 'next' && showNextMealNutrition && nextMeal.items && nextMeal.items.length > 0) {
-      // Only fetch if not already present for all items
-      const missingItems = nextMeal.items.filter(item => !nutritionData[item]);
-      if (missingItems.length > 0) {
-        fetchNutritionData(missingItems);
-      }
-    }
     // Create and inject styles for mobile responsiveness
     const style = document.createElement('style');
     style.textContent = `
@@ -132,6 +124,8 @@ const NutritionPage = () => {
   }, []);
   const [showTimetable, setShowTimetable] = useState(false);
   const [showNutritionGrid, setShowNutritionGrid] = useState(false);
+  const [showNextMealTotalNutrition, setShowNextMealTotalNutrition] = useState(false);
+  const [nextMealTotalNutrition, setNextMealTotalNutrition] = useState(null);
   const [activeTab, setActiveTab] = useState('current');
   const [currentMeal, setCurrentMeal] = useState({
     type: null,
@@ -156,12 +150,12 @@ const NutritionPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadingNutrition, setLoadingNutrition] = useState(false);
   const [error, setError] = useState(null);
-  const [useMockData, setUseMockData] = useState(false); // Toggle between mock and real API
+
   const [totalNutrition, setTotalNutrition] = useState(null);
   const [showTotalNutrition, setShowTotalNutrition] = useState(false);
   const [selectedServingSizes, setSelectedServingSizes] = useState({});
   const [nextMealServingSizes, setNextMealServingSizes] = useState({}); // For next meal tab
-  const [showNextMealNutrition, setShowNextMealNutrition] = useState(false); // State for next meal nutrition toggle
+  const [showNextMealNutrition, setShowNextMealNutrition] = useState(true); // Always show nutrition info
   
   // Fetch nutrition data for food items
   const fetchNutritionData = async (items) => {
@@ -204,46 +198,7 @@ const NutritionPage = () => {
     // Reset nutrition grid when fetching a new meal
     setShowNutritionGrid(false);
     
-    // TEMPORARY: Use mock data
-    if (useMockData) {
-      console.log('Using mock data');
-      const now = new Date();
-      
-      // Simple static mock data
-      const mockResponse = {
-        status: 'success',
-        data: {
-          currentMeal: {
-            type: 'lunch',
-            items: [
-              'Paneer Tikka', 
-              'Butter Naan', 
-              'Dal Makhani', 
-              'Raita', 
-              'Gulab Jamun'
-            ]
-          },
-          nextMeal: {
-            name: 'Dinner',
-            time: '19:30'
-          },
-          day: now.toLocaleDateString('en-US', { weekday: 'long' }),
-          currentTime: now.toLocaleTimeString()
-        }
-      };
-      
-      setCurrentMeal({
-        type: mockResponse.data.currentMeal?.type || null,
-        items: mockResponse.data.currentMeal?.items || [],
-        nextMeal: mockResponse.data.nextMeal,
-        day: mockResponse.data.day,
-        currentTime: mockResponse.data.currentTime
-      });
-      setLoading(false);
-      return;
-    }
-    
-    // Original API call (kept for reference)
+    // Fetch meal data from the API
     try {
       setLoading(true);
       // Use environment variable with fallback
@@ -314,6 +269,16 @@ const NutritionPage = () => {
     // Reset nutrition grid when meal items change
     setShowNutritionGrid(false);
   }, [currentMeal.items]);
+
+  // Fetch nutrition data for next meal when tab is active
+  useEffect(() => {
+    if (activeTab === 'next' && nextMeal.items && nextMeal.items.length > 0) {
+      const missingItems = nextMeal.items.filter(item => !nutritionData[item]);
+      if (missingItems.length > 0) {
+        fetchNutritionData(missingItems);
+      }
+    }
+  }, [activeTab, nextMeal.items]);
   
   // Manual refresh function
   const handleRefresh = () => {
@@ -348,7 +313,56 @@ const NutritionPage = () => {
     }
     setShowNutritionGrid(false);
   };
+
+  const handleNextMealQuantityChange = (item, change) => {
+    setNextMealQuantities(prev => ({
+      ...prev,
+      [item]: Math.max(0, parseFloat(((prev[item] || 0) + change).toFixed(1)))
+    }));
+    setShowNextMealTotalNutrition(false);
+    setNextMealTotalNutrition(null);
+  };
+
+  const handleNextMealServingSizeChange = (item, size) => {
+    setNextMealServingSizes(prev => ({
+      ...prev,
+      [item]: size
+    }));
+    setShowNextMealTotalNutrition(false);
+    setNextMealTotalNutrition(null);
+  };
   
+  const calculateNextMealTotalNutrition = () => {
+    let totalCals = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0;
+
+    nextMeal.items.forEach(item => {
+      const quantity = nextMealQuantities[item] || 0;
+      if (quantity > 0) {
+        const itemNutrition = nutritionData[item];
+        if (itemNutrition) {
+          const selectedSize = nextMealServingSizes[item] || 'medium';
+          const serving = itemNutrition.servings?.find(s => s.size === selectedSize) ||
+                          itemNutrition.servings?.find(s => s.size === 'medium') ||
+                          itemNutrition.servings?.find(s => s.size === 'small');
+
+          if (serving) {
+            totalCals += (serving.calories || 0) * quantity;
+            totalProtein += (serving.protein || 0) * quantity;
+            totalCarbs += (serving.carbs || 0) * quantity;
+            totalFat += (serving.fat || 0) * quantity;
+          }
+        }
+      }
+    });
+
+    return {
+      calories: Math.round(totalCals * 10) / 10,
+      protein: Math.round(totalProtein * 10) / 10,
+      carbs: Math.round(totalCarbs * 10) / 10,
+      fat: Math.round(totalFat * 10) / 10
+    };
+  };
+
   // Calculate total nutrition based on selected quantities and serving sizes
   const calculateTotalNutrition = () => {
     const totals = {
@@ -396,6 +410,14 @@ const NutritionPage = () => {
     setShowTotalNutrition(true);
     setShowNutritionGrid(true);
   };
+
+  const handleNextMealSubmit = () => {
+    const total = calculateNextMealTotalNutrition();
+    setNextMealTotalNutrition(total);
+    setShowNextMealTotalNutrition(true);
+  };
+
+  const isNextMealSubmitDisabled = Object.values(nextMealQuantities).reduce((sum, q) => sum + q, 0) === 0;
 
   // Format time with AM/PM (handles both 12-hour and 24-hour formats)
   const formatTimeWithAmPm = (timeString) => {
@@ -462,11 +484,7 @@ const NutritionPage = () => {
     return () => document.head.removeChild(style);
   }, []);
 
-  // Toggle between mock and real data (temporarily disabled)
-  const toggleDataMode = () => {
-    setUseMockData(prev => !prev);
-    fetchCurrentMeal(); // Refetch data with the new mode
-  };
+
 
   // Determine if it's currently a meal time
   const now = new Date();
@@ -518,59 +536,14 @@ const NutritionPage = () => {
 
   return (
     <div className="nutrition-page modern-nutrition">
-      {/* Next Meal Nutrition Toggle Button - ONLY VISIBLE when next tab is active */}
-      {activeTab === 'next' && (
-        <div style={{
-          margin: '0 auto 1rem auto',
-          display: 'flex',
-          justifyContent: 'center',
-          width: '100%',
-          maxWidth: 400
-        }}>
-          <button
-            onClick={() => setShowNextMealNutrition(prev => !prev)}
-            style={{
-              background: showNextMealNutrition ? 'linear-gradient(135deg, #42b883 0%, #347474 100%)' : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '12px 24px',
-              fontWeight: 'bold',
-              fontSize: '16px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-              width: '100%'
-            }}
-          >
-            {showNextMealNutrition ? 'Hide Nutrition Info' : 'Show Nutrition Info'}
-          </button>
-        </div>
-      )}
+
       {/* No custom header here; rely on global app-header */}
 
       {/* Add the plate reference button at the top */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
         <PlateSectionReference />
       </div>
-      {/* Mock Data Toggle Button */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-        <button
-          onClick={toggleDataMode}
-          style={{
-            background: useMockData ? 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)' : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '8px 16px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-          }}
-        >
-          {useMockData ? 'Using Mock Data' : 'Use Mock Data'}
-        </button>
-      </div>
+
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <div style={{ 
@@ -713,11 +686,7 @@ const NutritionPage = () => {
             }} />
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
-          {useMockData && (
-            <span className="mock-data-indicator">
-              Using Mock Data (for testing)
-            </span>
-          )}
+
         </div>
       </div>
       
@@ -762,64 +731,202 @@ const NutritionPage = () => {
                   </div>
                   <div className="current-time">{formatTimeWithAmPm(`${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`)}</div>
                 </div>
-                
-                {/* Simplified next meal display - only item names */}
-                <div className="next-meal-items" style={{
-                  backgroundColor: '#1a202c',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginTop: '10px',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                }}>
+                <div className="meal-cards">
                   {nextMeal.items && nextMeal.items.length > 0 ? (
-                    <>
-                      <h3 style={{ color: '#e2e8f0', marginTop: 0, marginBottom: '15px', fontSize: '1.25rem' }}>
-                        Menu Items:
-                      </h3>
-                      <ul style={{
-                        listStyleType: 'none',
-                        padding: 0,
-                        margin: 0,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px'
-                      }}>
-                        {nextMeal.items.map((item, index) => (
-                          <li key={index} style={{
-                            backgroundColor: '#2d3748',
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            color: 'white',
-                            fontSize: '1.1rem',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}>
-                            <span style={{ color: '#38bdf8', marginRight: '10px' }}>•</span>
-                            {typeof item === 'string' ? item.trim() : (item || 'Not specified')}
-                          </li>
-                        ))}
-                      </ul>
-                      {nextMeal.isFallbackData && (
-                        <div style={{
-                          marginTop: '15px',
-                          padding: '10px',
-                          backgroundColor: 'rgba(237, 137, 54, 0.2)',
-                          borderRadius: '6px',
-                          fontSize: '0.9rem',
-                          color: '#ed8936',
-                          textAlign: 'center'
-                        }}>
-                          Note: This menu is using fallback data and may change when the actual menu becomes available.
+                    nextMeal.items.map((item, index) => {
+                      const itemNutrition = nutritionData[item];
+                      const quantity = nextMealQuantities[item] || 0;
+                      const selectedSize = nextMealServingSizes[item] || 'medium';
+                      const serving = itemNutrition?.servings?.find(s => s.size === selectedSize) || 
+                                     itemNutrition?.servings?.find(s => s.size === 'medium') || 
+                                     itemNutrition?.servings?.find(s => s.size === 'small');
+                      const calculatedNutrition = {
+                        calories: serving ? Math.round((serving.calories || 0) * quantity * 10) / 10 : 0,
+                        protein: serving ? Math.round((serving.protein || 0) * quantity * 10) / 10 : 0,
+                        carbs: serving ? Math.round((serving.carbs || 0) * quantity * 10) / 10 : 0,
+                        fat: serving ? Math.round((serving.fat || 0) * quantity * 10) / 10 : 0
+                      };
+
+                      return (
+                        <div key={index} className="meal-card">
+                          <div className="meal-item dish-name">{item.trim() || 'Not specified'}</div>
+                          <div className="nutrition-info">
+                            {loadingNutrition ? (
+                              <div>Loading nutrition data...</div>
+                            ) : itemNutrition ? (
+                              <div>
+                                <div><span className="macro-label">Calories:</span> <span className="macro-value">{calculatedNutrition.calories}</span></div>
+                                <div><span className="macro-label">Protein:</span> <span className="macro-value">{calculatedNutrition.protein}g</span></div>
+                                <div><span className="macro-label">Carbs:</span> <span className="macro-value">{calculatedNutrition.carbs}g</span></div>
+                                <div><span className="macro-label">Fat:</span> <span className="macro-value">{calculatedNutrition.fat}g</span></div>
+                                <div className="serving-info" style={{marginTop: '4px', fontSize: '0.85em', color: '#666'}}>
+                                  <span style={{fontWeight: 'bold'}}>Serving:</span> {serving ? (serving.portion_label || (serving.size.charAt(0).toUpperCase() + serving.size.slice(1))) : 'Standard'}
+                                </div>
+                                {itemNutrition?.servings && itemNutrition.servings.length > 0 && (
+                                  <div className="serving-size-selector" style={{marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                                    <div style={{fontSize: '0.9em', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                      <MdRestaurant /> Serving Size:
+                                    </div>
+                                    <div style={{display: 'flex', gap: '5px', flexWrap: 'wrap'}}>
+                                      {itemNutrition.servings.map(serv => (
+                                        <button 
+                                          key={serv.size}
+                                          onClick={() => handleNextMealServingSizeChange(item, serv.size)}
+                                          className={`serving-size-btn${nextMealServingSizes[item] === serv.size ? ' active' : ''}`}
+                                          title={serv.portion_label || ''}
+                                        >
+                                          {serv.size.charAt(0).toUpperCase() + serv.size.slice(1)}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div>No nutrition data available</div>
+                            )}
+                          </div>
+                          <div className="quantity-controls" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <button onClick={() => handleNextMealQuantityChange(item, -1)} className="quantity-btn"><FaMinus /> 1</button>
+                            <button onClick={() => handleNextMealQuantityChange(item, -0.5)} className="quantity-btn" style={{ fontSize: '0.85em' }}><FaMinus /> 0.5</button>
+                            <span className="quantity" style={{ minWidth: '30px', textAlign: 'center' }}>{parseFloat(quantity).toFixed(1)}</span>
+                            <button onClick={() => handleNextMealQuantityChange(item, 0.5)} className="quantity-btn" style={{ fontSize: '0.85em' }}><FaPlus /> 0.5</button>
+                            <button onClick={() => handleNextMealQuantityChange(item, 1)} className="quantity-btn"><FaPlus /> 1</button>
+                          </div>
                         </div>
-                      )}
-                    </>
+                      );
+                    })
                   ) : (
-                    <div style={{ textAlign: 'center', padding: '20px', color: '#a0aec0' }}>
-                      <MdRestaurant size={40} style={{ marginBottom: '10px', color: '#718096' }} />
-                      <p style={{ fontSize: '1.1rem', margin: 0 }}>No items found for the next meal.</p>
-                    </div>
+                    <div className="no-items">No items available for this meal</div>
                   )}
                 </div>
+
+                {/* Submit button for Next Meal */}
+                <div style={{ marginTop: '20px', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
+                  <button
+                    onClick={() => {
+                      setNextMealTotalNutrition(calculateNextMealTotalNutrition());
+                      setShowNextMealTotalNutrition(true);
+                    }}
+                    disabled={isNextMealSubmitDisabled}
+                    style={{
+                      padding: '12px 32px',
+                      background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
+                      borderRadius: '24px',
+                      color: '#fff',
+                      border: 'none',
+                      fontWeight: 700,
+                      cursor: isNextMealSubmitDisabled ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 6px 18px rgba(56, 249, 215, 0.25), 0 2px 4px rgba(67, 233, 123, 0.18)',
+                      width: 'fit-content',
+                      minWidth: '130px',
+                      margin: '0 auto 20px auto',
+                      display: 'block',
+                      fontSize: '18px',
+                      letterSpacing: '0.7px',
+                      transition: 'all 0.25s cubic-bezier(.4,2,.6,1)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      opacity: isNextMealSubmitDisabled ? 0.6 : 1,
+                    }}
+                    onMouseOver={e => {
+                      if (!isNextMealSubmitDisabled) {
+                          e.currentTarget.style.background = 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)';
+                          e.currentTarget.style.boxShadow = '0 8px 24px rgba(56, 249, 215, 0.32), 0 4px 12px rgba(67, 233, 123, 0.28)';
+                          e.currentTarget.style.transform = 'scale(1.045)';
+                      }
+                    }}
+                    onMouseOut={e => {
+                      e.currentTarget.style.background = 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)';
+                      e.currentTarget.style.boxShadow = '0 6px 18px rgba(56, 249, 215, 0.25), 0 2px 4px rgba(67, 233, 123, 0.18)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <span style={{
+                      background: 'linear-gradient(90deg, #fff 30%, #b2ffe5 70%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      fontWeight: 800,
+                      textShadow: '0 2px 8px rgba(56, 249, 215, 0.18)',
+                      letterSpacing: '1px',
+                    }}>
+                    </span>
+                    Submit
+                  </button>
+                </div>
+
+                {/* Total Nutrition Grid for Next Meal (styled like Current Meal) */}
+                {showNextMealTotalNutrition && nextMealTotalNutrition && (
+                  <div style={{ 
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '16px',
+                    width: '100%',
+                    marginTop: '24px',
+                    marginBottom: '10px'
+                  }}>
+                    <div style={{ 
+                      padding: '16px 18px', 
+                      backgroundColor: 'rgba(49, 130, 206, 0.08)', 
+                      borderRadius: '12px',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05)',
+                      border: '1px solid rgba(49, 130, 206, 0.12)',
+                      textAlign: 'center',
+                      transition: 'transform 0.2s ease',
+                    }}>
+                      <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>CALORIES</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center' }}>
+                        <span style={{ color: '#3182ce', fontWeight: '700', fontSize: '28px' }}>{nextMealTotalNutrition.calories || 0}</span>
+                        <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}> kcal</span>
+                      </div>
+                    </div>
+                    <div style={{ 
+                      padding: '16px 18px', 
+                      backgroundColor: 'rgba(49, 130, 206, 0.08)', 
+                      borderRadius: '12px',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05)',
+                      border: '1px solid rgba(49, 130, 206, 0.12)',
+                      textAlign: 'center',
+                      transition: 'transform 0.2s ease',
+                    }}>
+                      <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>PROTEIN</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center' }}>
+                        <span style={{ color: '#3182ce', fontWeight: '700', fontSize: '28px' }}>{nextMealTotalNutrition.protein || 0}</span>
+                        <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
+                      </div>
+                    </div>
+                    <div style={{ 
+                      padding: '16px 18px', 
+                      backgroundColor: 'rgba(237, 137, 54, 0.08)', 
+                      borderRadius: '12px',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05)',
+                      border: '1px solid rgba(237, 137, 54, 0.12)',
+                      textAlign: 'center',
+                      transition: 'transform 0.2s ease',
+                    }}>
+                      <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>CARBS</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center' }}>
+                        <span style={{ color: '#ed8936', fontWeight: '700', fontSize: '28px' }}>{nextMealTotalNutrition.carbs || 0}</span>
+                        <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
+                      </div>
+                    </div>
+                    <div style={{ 
+                      padding: '16px 18px', 
+                      backgroundColor: 'rgba(159, 122, 234, 0.08)', 
+                      borderRadius: '12px',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.05)',
+                      border: '1px solid rgba(159, 122, 234, 0.12)',
+                      textAlign: 'center',
+                      transition: 'transform 0.2s ease',
+                    }}>
+                      <span style={{ display: 'block', color: '#666', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>FATS</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center' }}>
+                        <span style={{ color: '#9f7aea', fontWeight: '700', fontSize: '28px' }}>{nextMealTotalNutrition.fat || 0}</span>
+                        <span style={{ color: '#718096', fontSize: '14px', marginLeft: '5px' }}>g</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             );
           } else if (activeTab === 'current') {
@@ -1160,27 +1267,7 @@ const NutritionPage = () => {
             // Always show the Next Meal nutrition toggle button
             return (
               <div>
-                <button
-                  style={{
-                    background: showNextMealNutrition ? 'linear-gradient(135deg, #42b883 0%, #347474 100%)' : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '12px 24px',
-                    fontWeight: 'bold',
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                    width: '100%',
-                    marginBottom: 18
-                  }}
-                  onClick={() => {
-                    console.log('Toggle Next Meal Nutrition');
-                    setShowNextMealNutrition(prev => !prev);
-                  }}
-                >
-                  {showNextMealNutrition ? 'Hide Nutrition Info' : 'Show Nutrition Info'}
-                </button>
+
                 {/* Next Meal Tab content: toggle between simple and nutrition card view */}
                 {showNextMealNutrition ? (
                   <div className="meal-cards">
