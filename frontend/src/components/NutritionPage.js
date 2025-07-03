@@ -417,7 +417,7 @@ const NutritionPage = () => {
     setShowNextMealTotalNutrition(true);
   };
 
-  const isNextMealSubmitDisabled = Object.values(nextMealQuantities).reduce((sum, q) => sum + q, 0) === 0;
+  
 
   // Format time with AM/PM (handles both 12-hour and 24-hour formats)
   const formatTimeWithAmPm = (timeString) => {
@@ -808,7 +808,6 @@ const NutritionPage = () => {
                       setNextMealTotalNutrition(calculateNextMealTotalNutrition());
                       setShowNextMealTotalNutrition(true);
                     }}
-                    disabled={isNextMealSubmitDisabled}
                     style={{
                       padding: '12px 32px',
                       background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
@@ -816,7 +815,7 @@ const NutritionPage = () => {
                       color: '#fff',
                       border: 'none',
                       fontWeight: 700,
-                      cursor: isNextMealSubmitDisabled ? 'not-allowed' : 'pointer',
+                      cursor: 'pointer',
                       boxShadow: '0 6px 18px rgba(56, 249, 215, 0.25), 0 2px 4px rgba(67, 233, 123, 0.18)',
                       width: 'fit-content',
                       minWidth: '130px',
@@ -827,14 +826,12 @@ const NutritionPage = () => {
                       transition: 'all 0.25s cubic-bezier(.4,2,.6,1)',
                       position: 'relative',
                       overflow: 'hidden',
-                      opacity: isNextMealSubmitDisabled ? 0.6 : 1,
+                      opacity: 1,
                     }}
                     onMouseOver={e => {
-                      if (!isNextMealSubmitDisabled) {
-                          e.currentTarget.style.background = 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)';
-                          e.currentTarget.style.boxShadow = '0 8px 24px rgba(56, 249, 215, 0.32), 0 4px 12px rgba(67, 233, 123, 0.28)';
-                          e.currentTarget.style.transform = 'scale(1.045)';
-                      }
+                      e.currentTarget.style.background = 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)';
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(56, 249, 215, 0.32), 0 4px 12px rgba(67, 233, 123, 0.28)';
+                      e.currentTarget.style.transform = 'scale(1.045)';
                     }}
                     onMouseOut={e => {
                       e.currentTarget.style.background = 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)';
