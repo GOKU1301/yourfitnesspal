@@ -46,7 +46,7 @@ function App() {
       </main>
       
       <footer className="app-footer">
-        <p>&copy; {new Date().getFullYear()} jiitNutrition. All rights reserved.</p>
+        <p>Created By: Devansh Sharma</p>
       </footer>
     </div>
   );
