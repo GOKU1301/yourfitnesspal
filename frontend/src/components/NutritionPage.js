@@ -146,7 +146,8 @@ const NutritionPage = () => {
   
   const [quantities, setQuantities] = useState({});
   const [nextMealQuantities, setNextMealQuantities] = useState({}); // For next meal tab
-  const [nutritionData, setNutritionData] = useState({});
+  const [currentMealNutritionData, setCurrentMealNutritionData] = useState({});
+const [nextMealNutritionData, setNextMealNutritionData] = useState({});
   const [loading, setLoading] = useState(true);
   const [loadingNutrition, setLoadingNutrition] = useState(false);
   const [error, setError] = useState(null);
@@ -157,39 +158,34 @@ const NutritionPage = () => {
   const [nextMealServingSizes, setNextMealServingSizes] = useState({}); // For next meal tab
   const [showNextMealNutrition, setShowNextMealNutrition] = useState(true); // Always show nutrition info
   
-  // Fetch nutrition data for food items
-  const fetchNutritionData = async (items) => {
-    if (!items || items.length === 0) return;
-    
-    setLoadingNutrition(true);
-    try {
-      // Use environment variable with fallback
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      // Standardize the API_URL format
-      const apiUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
-      const queryString = items.join(',');
-      const response = await fetch(`${apiUrl}/nutrition?items=${encodeURIComponent(queryString)}`, {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
-      }
-      
-      const result = await response.json();
-      if (result.success) {
-        setNutritionData(result.data);
-      } else {
-        console.error('Failed to fetch nutrition data:', result.message);
-      }
-    } catch (error) {
-      console.error('Error fetching nutrition data:', error);
-    } finally {
-      setLoadingNutrition(false);
+  // Fetch nutrition data for food items, storing in the correct state
+const fetchNutritionData = async (items, setNutritionDataFn) => {
+  if (!items || items.length === 0) return;
+  setLoadingNutrition(true);
+  try {
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const apiUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+    const queryString = items.join(',');
+    const response = await fetch(`${apiUrl}/nutrition?items=${encodeURIComponent(queryString)}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
     }
-  };
+    const result = await response.json();
+    if (result.success) {
+      setNutritionDataFn(result.data);
+    } else {
+      console.error('Failed to fetch nutrition data:', result.message);
+    }
+  } catch (error) {
+    console.error('Error fetching nutrition data:', error);
+  } finally {
+    setLoadingNutrition(false);
+  }
+};
   
   // Fetch current and next meal data from API
   const fetchCurrentMeal = async () => {
@@ -261,24 +257,20 @@ const NutritionPage = () => {
     setShowNutritionGrid(false);
   }, []);
 
-  // Fetch nutrition data when meal items are loaded
-  useEffect(() => {
-    if (currentMeal && currentMeal.items && currentMeal.items.length > 0) {
-      fetchNutritionData(currentMeal.items);
-    }
-    // Reset nutrition grid when meal items change
-    setShowNutritionGrid(false);
-  }, [currentMeal.items]);
+  // Fetch nutrition data for current meal when items change
+useEffect(() => {
+  if (currentMeal && currentMeal.items && currentMeal.items.length > 0) {
+    fetchNutritionData(currentMeal.items, setCurrentMealNutritionData);
+  }
+  setShowNutritionGrid(false);
+}, [currentMeal.items]);
 
-  // Fetch nutrition data for next meal when tab is active
-  useEffect(() => {
-    if (activeTab === 'next' && nextMeal.items && nextMeal.items.length > 0) {
-      const missingItems = nextMeal.items.filter(item => !nutritionData[item]);
-      if (missingItems.length > 0) {
-        fetchNutritionData(missingItems);
-      }
-    }
-  }, [activeTab, nextMeal.items]);
+// Fetch nutrition data for next meal when items change and next tab is active
+useEffect(() => {
+  if (activeTab === 'next' && nextMeal.items && nextMeal.items.length > 0) {
+    fetchNutritionData(nextMeal.items, setNextMealNutritionData);
+  }
+}, [activeTab, nextMeal.items]);
   
   // Manual refresh function
   const handleRefresh = () => {
@@ -338,7 +330,7 @@ const NutritionPage = () => {
     nextMeal.items.forEach(item => {
       const quantity = nextMealQuantities[item] || 0;
       if (quantity > 0) {
-        const itemNutrition = nutritionData[item];
+        const itemNutrition = activeTab === 'next' ? nextMealNutritionData[item] : currentMealNutritionData[item];
         if (itemNutrition) {
           const selectedSize = nextMealServingSizes[item] || 'medium';
           const serving = itemNutrition.servings?.find(s => s.size === selectedSize) ||
@@ -375,8 +367,8 @@ const NutritionPage = () => {
     };
     
     Object.entries(quantities).forEach(([item, quantity]) => {
-      if (quantity > 0 && nutritionData[item]) {
-        const itemNutrition = nutritionData[item];
+      if (quantity > 0 && currentMealNutritionData[item]) {
+        const itemNutrition = currentMealNutritionData[item];
         
         // Get the selected serving size (or default to medium/small if not selected)
         const selectedSize = selectedServingSizes[item] || 'medium';
@@ -734,7 +726,7 @@ const NutritionPage = () => {
                 <div className="meal-cards">
                   {nextMeal.items && nextMeal.items.length > 0 ? (
                     nextMeal.items.map((item, index) => {
-                      const itemNutrition = nutritionData[item];
+                      const itemNutrition = activeTab === 'next' ? nextMealNutritionData[item] : currentMealNutritionData[item];
                       const quantity = nextMealQuantities[item] || 0;
                       const selectedSize = nextMealServingSizes[item] || 'medium';
                       const serving = itemNutrition?.servings?.find(s => s.size === selectedSize) || 
@@ -939,7 +931,7 @@ const NutritionPage = () => {
                     {currentMeal.items && currentMeal.items.length > 0 ? (
                       currentMeal.items.map((item, index) => {
                         // Get nutrition data for this item
-                        const itemNutrition = nutritionData[item];
+                        const itemNutrition = activeTab === 'next' ? nextMealNutritionData[item] : currentMealNutritionData[item];
                         const quantity = quantities[item] || 0;
                         
                         // Get the selected serving size (or default to medium/small if not selected)
@@ -1270,7 +1262,7 @@ const NutritionPage = () => {
                   <div className="meal-cards">
                     {nextMeal.items && nextMeal.items.length > 0 ? (
                       nextMeal.items.map((item, index) => {
-                        const itemNutrition = nutritionData[item];
+                        const itemNutrition = activeTab === 'next' ? nextMealNutritionData[item] : currentMealNutritionData[item];
                         const quantity = nextMealQuantities[item] || 1;
                         const servingOptions = itemNutrition?.servings || [];
                         const selectedSize = nextMealServingSizes[item] || servingOptions[0]?.size || 'medium';
@@ -1447,7 +1439,7 @@ const NutritionPage = () => {
                   <div className="meal-cards">
                     {nextMeal.items && nextMeal.items.length > 0 ? (
                       nextMeal.items.map((item, index) => {
-                        const itemNutrition = nutritionData[item];
+                        const itemNutrition = activeTab === 'next' ? nextMealNutritionData[item] : currentMealNutritionData[item];
                         const quantity = nextMealQuantities[item] || 1;
                         const servingOptions = itemNutrition?.servings || [];
                         const selectedSize = nextMealServingSizes[item] || servingOptions[0]?.size || 'medium';
