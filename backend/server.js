@@ -61,6 +61,7 @@ app.use(cors({
       'https://yourfitnesspal.vercel.app',  // Production frontend
       'https://yourfitnesspal-git-branch3-goku1301s-projects.vercel.app', // Branch3 frontend
       'https://yourfitnesspal.onrender.com', // Render deployment
+      'https://yourfitnesspal-git-render-goku1301s-projects.vercel.app', // Vercel preview (render branch)
     ];
     
     // Add environment-specific frontend URL if set
