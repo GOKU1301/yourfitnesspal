@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { promises as fs } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -352,89 +351,6 @@ async function findBestNutritionixMatch(foodItem, useGeminiFallback = true) {
 }
 
 /**
- * Check if a food item is likely Indian food based on common terms
- * @param {string} foodItem - The food item to check
- * @returns {boolean} - Whether the food is likely Indian
- */
-function isIndianFood(foodItem) {
-  const indianFoodTerms = [
-    'aloo', 'paneer', 'dal', 'roti', 'naan', 'tikka', 'masala', 
-    'sabzi', 'puri', 'paratha', 'samosa', 'pulao', 'biryani',
-    'korma', 'vindaloo', 'kheer', 'ladoo', 'gulab', 'jamun',
-    'raita', 'chutney', 'sambar', 'rasam', 'dosa', 'idli', 'vada'
-  ];
-  
-  return indianFoodTerms.some(term => 
-    foodItem.toLowerCase().includes(term.toLowerCase())
-  );
-}
-
-/**
- * Add a food mapping if it doesn't already exist
- * @param {string} localName - Original food name
- * @param {string} standardName - Standard food name in Nutritionix
- * @returns {Promise<{added: boolean, existed: boolean}>} - Whether the mapping was added or existed
- */
-async function addFoodMappingIfNew(localName, standardName) {
-  const mappingsPath = path.join(process.cwd(), 'data', 'foodMappings.json');
-  const mappingsDir = path.dirname(mappingsPath);
-  
-  try {
-    // Create data directory if it doesn't exist
-    await fs.mkdir(mappingsDir, { recursive: true });
-    
-    let mappings = {};
-    
-    // Read existing mappings if file exists
-    try {
-      const rawData = await fs.readFile(mappingsPath, 'utf8');
-      if (rawData.trim()) {
-        mappings = JSON.parse(rawData);
-      }
-    } catch (readError) {
-      if (readError.code !== 'ENOENT') {
-        console.error('❌ Error reading food mappings:', readError.message);
-      }
-      // If file doesn't exist, we'll create it with the new mapping
-    }
-    
-    // Normalize names
-    const normalizedLocalName = localName.toLowerCase().trim();
-    const normalizedStandardName = standardName.toLowerCase().trim();
-    
-    // Check if mapping already exists
-    if (mappings[normalizedLocalName]) {
-      const existingMapping = mappings[normalizedLocalName];
-      if (existingMapping === normalizedStandardName) {
-        console.log(`ℹ️ Mapping already exists: "${normalizedLocalName}" → "${normalizedStandardName}"`);
-        return { added: false, existed: true };
-      } else {
-        console.log(`🔄 Updating mapping: "${normalizedLocalName}" from "${existingMapping}" to "${normalizedStandardName}"`);
-      }
-    }
-    
-    // Add/update the mapping
-    mappings[normalizedLocalName] = normalizedStandardName;
-    
-    // Write back to file with pretty print
-    await fs.writeFile(mappingsPath, JSON.stringify(mappings, null, 2), 'utf8');
-    
-    return { 
-      added: true, 
-      existed: false 
-    };
-    
-  } catch (error) {
-    console.error('❌ Error adding/updating food mapping:', error.message);
-    return { 
-      added: false, 
-      existed: false,
-      error: error.message 
-    };
-  }
-}
-
-/**
  * Process a list of food items and add mappings for them
  * @param {Array<string>} foodItems - List of food items to process
  * @returns {Promise<Array>} - Results of processing
@@ -456,12 +372,10 @@ async function processFoodItemsForMappings(foodItems) {
       
       if (match.found && match.similarity > 0.6) {
         // Add to mappings if it's a good match
-        const added = await addFoodMappingIfNew(match.originalName, match.standardName);
         results.push({
           originalName: match.originalName,
           standardName: match.standardName,
           similarity: match.similarity,
-          added
         });
       } else {
         console.log(`⚠️ No good match found for "${item}". Skipping.`);
@@ -669,7 +583,5 @@ async function getNutritionInfo(foodItem, useGeminiFallback = true) {
 export {
   searchNutritionix,
   findBestNutritionixMatch,
-  addFoodMappingIfNew,
-  processFoodItemsForMappings,
   getNutritionInfo
 };

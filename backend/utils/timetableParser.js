@@ -104,37 +104,6 @@ class TimetableParser {
       throw error;
     }
   }
-
-  /**
-   * Parse text from a file
-   * @param {string} filePath - Path to the text file
-   * @returns {Promise<Object>} - Parsed timetable data
-   */
-  async parseTextFile(filePath) {
-    try {
-      console.log(`🔍 [TIMETABLE_PARSER] Processing timetable text from file: ${filePath}`);
-      
-      // Check if file exists
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
-      }
-      
-      // Read text from file
-      const text = fs.readFileSync(filePath, 'utf8');
-      
-      console.log('Raw timetable text:');
-      console.log('-'.repeat(50));
-      console.log(text);
-      console.log('-'.repeat(50));
-      
-      // Parse the text
-      return this.parseText(text);
-    } catch (error) {
-      console.error('Error parsing text file:', error);
-      throw error;
-    }
-  }
-
   /**
    * Extract food items from text
    * @param {string} text - Text containing food items

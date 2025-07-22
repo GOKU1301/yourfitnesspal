@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // API URL with proper environment detection
 const API_URL = process.env.NODE_ENV === 'production'
-  ? 'https://yourfitnesspal-production.up.railway.app'
+  ? 'https://yourfitnesspal.onrender.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:5000');
 
 // Standardize the API_URL format to ensure it doesn't have a trailing '/api'

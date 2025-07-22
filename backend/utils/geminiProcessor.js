@@ -1,10 +1,4 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 class GeminiProcessor {
   constructor() {
@@ -90,73 +84,9 @@ class GeminiProcessor {
     }
   }
 
-  /**
-   * Extract text from an image using Gemini (legacy file path version)
-   * @param {string} imagePath - Path to the image file
-   * @returns {Promise<string>} - Extracted text
-   */
-  async extractTextFromImage(imagePath) {
-    try {
-      console.log('Processing image with Gemini (file path method)...');
-      
-      // Convert to absolute path if it's not already
-      const absolutePath = path.isAbsolute(imagePath) ? imagePath : path.join(process.cwd(), imagePath);
-      
-      console.log(`Looking for image at: ${absolutePath}`);
-      
-      // Check if file exists and is accessible
-      if (!fs.existsSync(absolutePath)) {
-        throw new Error(`Image file not found at: ${absolutePath}. Current working directory: ${process.cwd()}`);
-      }
 
-      // Get file stats for logging
-      const stats = fs.statSync(absolutePath);
-      if (stats.size === 0) {
-        throw new Error('Image file is empty');
-      }
-      console.log(`Image file size: ${stats.size} bytes`);
-      console.log(`Image path: ${absolutePath}`);
 
-      // Read image directly as buffer
-      const imageBuffer = fs.readFileSync(absolutePath);
-      if (!imageBuffer || imageBuffer.length === 0) {
-        throw new Error('Failed to read image file or file is empty');
-      }
-      
-      // Get file extension to determine MIME type
-      const ext = path.extname(absolutePath).toLowerCase().substring(1);
-      const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      
-      // Use the buffer-based method
-      return this.extractTextFromImageBuffer(imageBuffer, mimeType);
-    } catch (error) {
-      console.error('Error extracting text with Gemini:', error);
-      throw error;
-    }
-  }
 
-  /**
-   * Get MIME type based on file extension and content
-   * @private
-   */
-  getMimeType(filePath) {
-    // First try to get from file extension
-    const ext = path.extname(filePath).toLowerCase().replace('.', '');
-    
-    // Map of common image extensions to their MIME types
-    const mimeTypes = {
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'bmp': 'image/bmp',
-      'tiff': 'image/tiff'
-    };
-    
-    // Return the MIME type if found, otherwise return octet-stream
-    return mimeTypes[ext] || 'application/octet-stream';
-  }
 
   /**
    * Extract CSV data from Gemini's response
@@ -191,55 +121,16 @@ class GeminiProcessor {
    * @param {string} imagePath - Path to the image file
    * @returns {Promise<{text: string, filePath: string}>}
    */
-  async processTimetableImage(imagePath) {
+  async processTimetableImage(imageBuffer, mimeType = 'image/jpeg') {
     try {
-      const text = await this.extractTextFromImage(imagePath);
-      const filePath = this.saveExtractedText(text);
-      return { text, filePath };
+      const text = await this.extractTextFromImageBuffer(imageBuffer, mimeType);
+      return { text };
     } catch (error) {
       console.error('Error processing timetable image with Gemini:', error);
       throw error;
     }
   }
 
-  /**
-   * Save extracted text to a file
-   * @private
-   */
-  saveExtractedText(text, outputDir = 'data/extracted') {
-    try {
-      // Create directory if it doesn't exist
-      const fullOutputDir = path.join(process.cwd(), outputDir);
-      if (!fs.existsSync(fullOutputDir)) {
-        fs.mkdirSync(fullOutputDir, { recursive: true });
-      }
-      
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const outputPath = path.join(fullOutputDir, `timetable-${timestamp}.txt`);
-      
-      // Write to file
-      fs.writeFileSync(outputPath, text);
-      console.log(`Text saved to ${outputPath}`);
-      
-      return outputPath;
-    } catch (error) {
-      console.error('Error saving extracted text:', error);
-      throw error;
-    }
-  }
-}
 
-// Process a timetable image and return the extracted text
-export async function processTimetableImage(imagePath) {
-  try {
-    const processor = new GeminiProcessor();
-    const extractedText = await processor.extractTextFromImage(imagePath);
-    return extractedText;
-  } catch (error) {
-    console.error('Error in processTimetableImage:', error);
-    throw error;
-  }
 }
-
 export default GeminiProcessor;

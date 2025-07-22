@@ -1,4 +1,4 @@
-import { findBestNutritionixMatch, addFoodMappingIfNew } from './utils/nutritionixSearch.js';
+import { findBestNutritionixMatch } from './utils/nutritionixSearch.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
@@ -14,8 +14,8 @@ async function testSingleFoodItem(foodItem) {
   
   // 2. Add to mappings if it's a good match
   if (match.found && match.similarity > 0.6) {
-    const added = await addFoodMappingIfNew(match.originalName, match.standardName);
-    console.log(`📝 ${added ? 'Added' : 'Skipped adding'} mapping for "${match.originalName}"`);
+      console.log('Match found:');
+      console.log(match);
   } else {
     console.log('⚠️ No good match found or similarity too low');
   }

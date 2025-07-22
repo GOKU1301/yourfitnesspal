@@ -1,46 +1,17 @@
 import express from 'express';
-import path from 'path';
 import multer from 'multer';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import cors from 'cors';
 import GeminiProcessor from './utils/geminiProcessor.js';
 import { findBestNutritionixMatch } from './utils/nutritionixSearch.js';
-import { addFoodMapping } from './utils/foodMapping.js';
 import { processAndStoreNutrition } from './utils/nutritionPipeline.js';
 import TimetableParser from './utils/timetableParser.js';
 import moment from 'moment-timezone';
-
 import { verifyToken, isAdmin } from './middleware/auth.js';
 import mongoose from 'mongoose';
-import Meal from './models/Meal.js';
-import { findStandardFoodName } from './utils/foodMapping.js';
 
-// Connect to MongoDB
-async function connectDB() {
-  try {
-    console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000
-    });
-    console.log('✅ MongoDB connected successfully');
-    return true;
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err);
-    return false;
-  }
-}
-
-// Get the default connection
-const db = mongoose.connection;
-
-db.on('error', console.error.bind(console, 'MongoDB connection error:'));
-db.once('open', () => {
-  console.log('MongoDB connection ready');
-});
+// MongoDB connection will be handled in startServer()
 
 /**
  * Extract food items from text
@@ -89,6 +60,7 @@ app.use(cors({
       'http://localhost:3000',              // Local development
       'https://yourfitnesspal.vercel.app',  // Production frontend
       'https://yourfitnesspal-git-branch3-goku1301s-projects.vercel.app', // Branch3 frontend
+      'https://yourfitnesspal.onrender.com', // Render deployment
     ];
     
     // Add environment-specific frontend URL if set
@@ -706,49 +678,15 @@ app.get('/api/nutrition', async (req, res) => {
   }
 });
 
-// Debug endpoint to list all registered routes
-app.get('/debug/routes', (req, res) => {
-  const routes = [];
-  
-  function printRoutes(layer) {
-    if (layer.route) {
-      // Routes registered directly on the app
-      layer.route.stack.forEach(printRoutes);
-    } else if (layer.name === 'router' && layer.handle.stack) {
-      // Router middleware (like auth routes)
-      layer.handle.stack.forEach(printRoutes);
-    } else if (layer.route) {
-      // Routes registered with app.route()
-      const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
-      routes.push(`${methods} ${layer.route.path}`);
-    } else if (layer.path) {
-      // Regular routes
-      routes.push(`GET ${layer.path}`);
-    }
-  }
-  
-  app._router.stack.forEach(printRoutes);
-  
-  res.json({
-    message: 'Registered routes',
-    routes: routes.sort()
-  });
-});
-
-// Error handling middleware
+// Centralized error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ error: err.message || 'Server error' });
 });
 
-// Import MenuImage model
+// Get MenuImage model
 const getMenuImageModel = async () => {
-  try {
-    return (await import('./models/MenuImage.js')).default;
-  } catch (error) {
-    console.error('Error importing MenuImage model:', error);
-    throw error;
-  }
+  return (await import('./models/MenuImage.js')).default;
 };
 
 // Configure multer for memory storage (for MongoDB)
@@ -769,12 +707,6 @@ const upload = multer({
     }
   }
 });
-
-// Supported image MIME types
-const SUPPORTED_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-// Import the routes
-
 
 // Legacy route for backward compatibility
 // Redirects to the new timetable upload endpoint
@@ -862,39 +794,7 @@ app.post('/api/timetable/upload', isAdmin, upload.single('image'), async (req, r
   }
 });
 
-/**
- * Get meal plans within a date range
- */
-app.get('/api/meals', async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'startDate and endDate query parameters are required'
-      });
-    }
-
-    const meals = await Meal.find({
-      dayDate: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      }
-    }).sort({ dayDate: 1 });
-
-    res.status(200).json({
-      success: true,
-      data: meals
-    });
-  } catch (error) {
-    console.error('Error fetching meal plans:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch meal plans'
-    });
-  }
-});
+// Meal plans endpoint removed - functionality moved to dedicated routes
 
 const PORT = process.env.PORT || 5000;
 

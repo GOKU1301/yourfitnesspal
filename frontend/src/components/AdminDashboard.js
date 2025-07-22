@@ -180,7 +180,6 @@ const AdminDashboard = () => {
       }
       
       // Use environment-based API URL with fallback for REACT_APP_API_URL
-      // Use environment variable with fallback
       const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       // Standardize the API_URL format
       const API_URL = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;

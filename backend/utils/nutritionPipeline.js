@@ -1,6 +1,5 @@
 import { GeminiNutrition, saveNutritionToDb } from './geminiNutrition.js';
 import { getNutritionInfo } from './nutritionixSearch.js';
-import { generateScaledServings } from './portionScaling.js';
 import { isLiquidFood, formatFoodPortion } from './foodUtils.js';
 
 /**
@@ -44,15 +43,12 @@ async function processAndStoreNutrition(foodItems = []) {
       const similarity = nutritionixResult && (typeof nutritionixResult.similarity === 'number' ? nutritionixResult.similarity : (nutritionixResult.bestMatch && typeof nutritionixResult.bestMatch.similarity === 'number' ? nutritionixResult.bestMatch.similarity : 0));
 
       // If no result from Nutritionix or similarity is too low, use Gemini
-      if (!nutritionixResult || !nutritionixResult.nutrition || similarity < MIN_SIMILARITY) {
-        
+      if (!nutritionixResult || !nutritionixResult.nutrition || similarity < MIN_SIMILARITY) { 
         const reason = !nutritionixResult ? 'no result' : 
                       (nutritionixResult.bestMatch ? 
                        `low similarity (${nutritionixResult.bestMatch.similarity.toFixed(2)})` : 'no nutrition data');
-        
         console.log(`🍽️ [NUTRITION_PIPELINE] Falling back to Gemini for "${item}": ${reason}`);
-        console.log(`🍽️ [NUTRITION_PIPELINE] Gemini request timestamp: ${new Date().toISOString()}`);
-        
+        console.log(`🍽️ [NUTRITION_PIPELINE] Gemini request timestamp: ${new Date().toISOString()}`);   
         const geminiResult = await gemini.getNutritionInfo(item);
         console.log(`🍽️ [NUTRITION_PIPELINE] Gemini result for "${item}": ${geminiResult ? 'Success' : 'Failed'}`);
         if (geminiResult) {
@@ -75,15 +71,10 @@ async function processAndStoreNutrition(foodItems = []) {
       if (nutritionixResult && nutritionixResult.success && nutritionixResult.nutrition) {
         // Nutritionix gave us a base nutrition (per X grams or per piece)
         const base = nutritionixResult.nutrition;
-        
-        // Check if this is a piece-based food (like sweets) that should use piece-based scaling
-        // Expanded piece-based food detection
         const PIECE_BASED_FOODS = [
           'roti','roti','chapati','paratha','naan','poori','puri','bread','bread omelette','gulab jamun','jalebi','kachori','sandwich','coleslaw sandwich','bread omelette','poori','kachori','jalebi','barfi','peda','laddu','ladoo','rasgulla','soan papdi','vada','samosa','idli','ball','cookie','biscuit','cutlet','pakora','burger','pizza slice','bun','pav'
         ];
         const isPieceBasedFood = PIECE_BASED_FOODS.some(f => item.toLowerCase().includes(f)) || (base.serving_unit && typeof base.serving_unit === 'string' && ['piece', 'pieces', 'ball', 'balls', 'cookie', 'cookies'].includes(base.serving_unit.toLowerCase()));
-
-        // Helper for realistic weights for piece-based foods
         const PIECE_BASED_WEIGHTS = {
           roti:    { small: 30, medium: 50, large: 70 },
           paratha: { small: 50, medium: 80, large: 120 },
@@ -229,10 +220,6 @@ async function processAndStoreNutrition(foodItems = []) {
               _originalCalories: baseCalories
             }))
           };
-        
-        
-        // Remove the code that references undefined prompt variable
-        // This was causing the "prompt is not defined" error
         let portionSizes;
         try {
           // Create default portionSizes directly instead of calling Gemini here

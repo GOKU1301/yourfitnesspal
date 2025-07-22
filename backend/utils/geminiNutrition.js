@@ -14,7 +14,7 @@ class GeminiNutrition {
     this.model = this.genAI.getGenerativeModel({ 
       model: 'gemini-1.5-flash',
       generationConfig: {
-        temperature: 0.1,
+        temperature: 0.13
       },
     });
   }

@@ -17,9 +17,6 @@ const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'jiitnutritionind
 // Model configuration for embeddings
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
 
-// Food mapping database - local fallback for when Pinecone is unavailable
-const FOOD_MAPPINGS_PATH = path.join(__dirname, '../data/foodMappings.json');
-
 // Initialize Pinecone client and index
 let pineconeClient = null;
 let pineconeIndex = null;
@@ -101,52 +98,12 @@ async function generateEmbedding(text) {
 }
 
 /**
- * Load the local food mappings database
- * @returns {Object} - Food mappings
- */
-function loadLocalMappings() {
-  try {
-    if (fs.existsSync(FOOD_MAPPINGS_PATH)) {
-      const data = fs.readFileSync(FOOD_MAPPINGS_PATH, 'utf8');
-      return JSON.parse(data);
-    }
-    return {};
-  } catch (error) {
-    console.error('Error loading local food mappings:', error);
-    return {};
-  }
-}
-
-/**
- * Save mappings to local database
- * @param {Object} mappings - Food mappings to save
- */
-function saveLocalMappings(mappings) {
-  try {
-    // Ensure directory exists
-    const dir = path.dirname(FOOD_MAPPINGS_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    
-    fs.writeFileSync(FOOD_MAPPINGS_PATH, JSON.stringify(mappings, null, 2));
-  } catch (error) {
-    console.error('Error saving local food mappings:', error);
-  }
-}
-
-/**
  * Add a food mapping to Pinecone
  * @param {string} localName - Local food name (e.g., "achar")
  * @param {string} standardName - Standard food name (e.g., "pickle")
  */
 async function addFoodMapping(localName, standardName) {
   try {
-    // First update local mappings
-    const localMappings = loadLocalMappings();
-    localMappings[localName.toLowerCase()] = standardName.toLowerCase();
-    saveLocalMappings(localMappings);
-    
     // Then update Pinecone if available
     if (pineconeIndex) {
       const embedding = await generateEmbedding(localName);
@@ -235,7 +192,7 @@ async function findStandardFoodName(foodItem) {
   console.log(`🔍 [FOOD_MAPPING] No exact match found in local database for "${normalizedFoodItem}"`);
   
   // Import Nutritionix search function here to avoid circular dependencies
-  const { findBestNutritionixMatch, addFoodMappingIfNew } = await import('./nutritionixSearch.js');
+  const { findBestNutritionixMatch } = await import('./nutritionixSearch.js');
   
   try {
     // First try to find a match in Nutritionix
@@ -250,10 +207,6 @@ async function findStandardFoodName(foodItem) {
     
     if (nutritionixMatch.found && nutritionixMatch.similarity >= 0.7) {
       console.log(`✅ [FOOD_MAPPING] Found NUTRITIONIX match: "${normalizedFoodItem}" → "${nutritionixMatch.standardName}" (similarity: ${nutritionixMatch.similarity.toFixed(3)})`);
-      
-      // Add this mapping for future use
-      console.log(`🔄 [FOOD_MAPPING] Adding new mapping to database: "${normalizedFoodItem}" → "${nutritionixMatch.standardName}"`);
-      await addFoodMappingIfNew(normalizedFoodItem, nutritionixMatch.standardName);
       return nutritionixMatch.standardName;
     }
     
@@ -293,9 +246,7 @@ async function findStandardFoodName(foodItem) {
       // Only use Pinecone match if we're very confident
       if (bestMatch.score > 0.8 && bestMatch.metadata?.standardName) {
         console.log(`✅ [FOOD_MAPPING] Using PINECONE match: "${normalizedFoodItem}" → "${bestMatch.metadata.standardName}" (score: ${bestMatch.score.toFixed(3)})`);
-        // Add this mapping for future use
-        console.log(`🔄 [FOOD_MAPPING] Adding successful Pinecone mapping to local database`);
-        await addFoodMappingIfNew(normalizedFoodItem, bestMatch.metadata.standardName);
+        // Mappings are now handled by Pinecone directly
         return bestMatch.metadata.standardName;
       } else {
         console.log(`⚠️ [FOOD_MAPPING] Best Pinecone match score (${bestMatch.score.toFixed(3)}) below threshold (0.8), using original`);
@@ -401,6 +352,4 @@ export {
   addFoodMapping,
   initializeFoodMappings,
   calculateStringSimilarity,
-  loadLocalMappings,
-  saveLocalMappings
 };
