@@ -21,107 +21,6 @@ const PLATE_SECTIONS = [
   { label: "Main", value: "~300ml / ~290g", style: { bottom: "20%", left: "50%", transform: 'translateX(-50%)' } },
 ];
 
-const PlateSectionReference = () => {
-  const [open, setOpen] = useState(false);
-  const plateSections = [
-    { label: "VEGETABLES", value: "50% of plate", color: "#2ecc71", style: { top: "10%", left: "50%", transform: "translateX(-50%)" } },
-    { label: "PROTEIN", value: "25% of plate", color: "#e74c3c", style: { bottom: "10%", left: "25%", transform: "translateX(-50%)" } },
-    { label: "CARBS", value: "25% of plate", color: "#3498db", style: { bottom: "10%", right: "25%", transform: "translateX(50%)" } },
-  ];
-
-  return (
-    <div>
-      <button 
-        onClick={() => setOpen(true)}
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          background: '#3498db',
-          color: 'white',
-          border: 'none',
-          borderRadius: '50%',
-          width: '60px',
-          height: '60px',
-          fontSize: '24px',
-          cursor: 'pointer',
-          boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-          zIndex: 1000
-        }}
-      >
-        ℹ️
-      </button>
-      {open && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1001
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '2rem',
-            borderRadius: '10px',
-            maxWidth: '500px',
-            width: '90%',
-            textAlign: 'center',
-            position: 'relative'
-          }}>
-            <h2>Plate Section Reference</h2>
-            <div style={{
-              width: '300px',
-              height: '300px',
-              margin: '20px auto',
-              position: 'relative',
-              background: '#f5f5f5',
-              borderRadius: '50%',
-              border: '2px solid #333'
-            }}>
-              {plateSections.map((section, index) => (
-                <div 
-                  key={index} 
-                  style={{
-                    position: 'absolute',
-                    backgroundColor: section.color,
-                    color: 'white',
-                    padding: '10px',
-                    borderRadius: '5px',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    ...section.style
-                  }}
-                >
-                  {section.label}<br />
-                  <span style={{ fontWeight: "normal", fontSize: "0.75rem" }}>{section.value}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setOpen(false)}
-              style={{
-                marginTop: '24px',
-                background: "#e74c3c",
-                color: "white",
-                border: "none",
-                borderRadius: 8,
-                padding: "10px 32px",
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const NutritionPage = () => {
   // Reference for styles
   const styleRef = useRef(null);
@@ -248,7 +147,7 @@ const NutritionPage = () => {
   const [quantities, setQuantities] = useState({});
   const [nextMealQuantities, setNextMealQuantities] = useState({}); // For next meal tab
   const [currentMealNutritionData, setCurrentMealNutritionData] = useState({});
-  const [nextMealNutritionData, setNextMealNutritionData] = useState({});
+const [nextMealNutritionData, setNextMealNutritionData] = useState({});
   const [loading, setLoading] = useState(true);
   const [loadingNutrition, setLoadingNutrition] = useState(false);
   const [error, setError] = useState(null);
@@ -590,10 +489,10 @@ useEffect(() => {
     { type: 'dinner', start: 19 * 60, end: 22 * 60 }
   ];
   const currentWindow = windows.find(w => currentMinutes >= w.start && currentMinutes < w.end);
-  // const isMealTime=true;
-  const isMealTime = !!currentWindow &&
-    typeof currentMeal.type === 'string' &&
-    currentMeal.type.trim().toLowerCase() === currentWindow.type.toLowerCase();
+  // const isMealTime = !!currentWindow &&
+  //   typeof currentMeal.type === 'string' &&
+  //   currentMeal.type.trim().toLowerCase() === currentWindow.type.toLowerCase();
+  const isMealTime=true;
   // Debug output for meal window logic
   if (currentWindow) {
     console.debug('[Meal Window Debug]', {
@@ -808,9 +707,9 @@ useEffect(() => {
                     </h2>
                     {nextMeal.isFallbackData && (
                       <div style={{ 
-                        color: '#e2e8f0',
-                        marginTop: '4px',
+                        color: '#e67e22', 
                         fontSize: '0.85rem',
+                        marginTop: '4px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '5px'
@@ -1524,12 +1423,12 @@ useEffect(() => {
                       alignItems: 'center',
                       gap: '0.5rem'
                     }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="12" y1="8" x2="12" y2="12"></line>
                         <line x1="12" y1="16" x2="12.01" y2="16"></line>
                       </svg>
-                      <span style={{color:'#92400e',fontSize:'0.9rem'}}>
+                      <span style={{color: '#92400e', fontSize: '0.9rem'}}>
                         {nextMeal.isFallbackData === true ? 'Using current meal items as preview' : 'Using fallback data from previous week\'s schedule'}
                       </span>
                     </div>
@@ -1674,5 +1573,109 @@ useEffect(() => {
     </div>
   );
 };
+
+// Plate Section Reference Button + Modal
+function PlateSectionReference() {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div style={{ textAlign: 'center', margin: '16px 0' }}>
+      <button
+        style={{
+          background: "linear-gradient(145deg, #8E7EFF, #6353D9)",
+          color: "white",
+          border: "none",
+          borderRadius: "12px",
+          padding: "12px 22px",
+          fontWeight: "bold",
+          fontSize: "0.95rem",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto",
+          boxShadow: "0 4px 12px rgba(124, 106, 237, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3)",
+          transition: "all 0.2s ease",
+          letterSpacing: "0.5px"
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.transform = "translateY(-2px)";
+          e.currentTarget.style.boxShadow = "0 6px 16px rgba(124, 106, 237, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.transform = "translateY(0)";
+          e.currentTarget.style.boxShadow = "0 4px 12px rgba(124, 106, 237, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3)";
+        }}
+        onClick={() => setOpen(true)}
+      >
+        <span style={{ marginRight: 8, fontSize: "1.1rem" }}>ℹ️</span>
+        View Plate Section Reference
+      </button>
+      {open && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+          background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <div style={{
+            background: "#232323",
+            padding: 32,
+            borderRadius: 16,
+            boxShadow: "0 0 24px #000",
+            minWidth: 350,
+            maxWidth: 700,
+            textAlign: "center",
+            position: "relative"
+          }}>
+            <h2 style={{ color: "white", marginBottom: 20 }}>College Plate Section Reference</h2>
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <img
+                src={process.env.PUBLIC_URL + "/images/plateimage.png"}
+                alt="College Plate"
+                style={{ width: 500, maxWidth: "90vw", borderRadius: 10 }}
+              />
+              {PLATE_SECTIONS.map((section, i) => (
+                <div
+                  key={i}
+                  style={{
+                    position: "absolute",
+                    color: "white",
+                    background: "rgba(0,0,0,0.7)",
+                    border: "2px solid #fff",
+                    borderRadius: 8,
+                    padding: "4px 8px",
+                    fontWeight: "bold",
+                    fontSize: "0.85rem", // Reduced from 1.1rem
+                    pointerEvents: "none",
+                    textAlign: "center",
+                    maxWidth: "90px", // Control width for smaller spaces
+                    ...section.style
+                  }}
+                >
+                  {section.label}<br />
+                  <span style={{ fontWeight: "normal", fontSize: "0.75rem" }}>{section.value}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              style={{
+                marginTop: 24,
+                background: "#e74c3c",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                padding: "10px 32px",
+                fontWeight: "bold",
+                fontSize: "1.1rem",
+                cursor: "pointer"
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default NutritionPage;

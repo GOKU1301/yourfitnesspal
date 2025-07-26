@@ -10,6 +10,7 @@ import TimetableParser from './utils/timetableParser.js';
 import moment from 'moment-timezone';
 import { verifyToken, isAdmin } from './middleware/auth.js';
 import mongoose from 'mongoose';
+import Meal from './models/Meal.js';
 
 // MongoDB connection will be handled in startServer()
 
