@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 
 // Components
@@ -48,6 +49,7 @@ function App() {
       <footer className="app-footer">
         <p>Created By: Devansh Sharma</p>
       </footer>
+      <Analytics />
     </div>
   );
 }
